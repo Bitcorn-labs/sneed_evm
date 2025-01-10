@@ -26,6 +26,14 @@ hub_client_canister
 # Switch environment if desired (Mainnet vs. Testnet)
 dfx canister call hub_client_canister setDeploymentEnv '(variant { Testnet })'
 
+Hub canister id: 
+- Mannet: n6ii2-2yaaa-aaaaj-azvia-cai
+- Testnet:  l5h5f-miaaa-aaaal-qjioq-cai
+
+target_chain_id: 
+- Mainnet: base
+- Testnet: base_sepolia”
+
 # Bridge ICRC tokens
 dfx canister call hub_client_canister bridgeICRCToken '(
   principal "<ICRC_TOKEN_PID>",
