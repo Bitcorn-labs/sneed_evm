@@ -1,0 +1,20 @@
+{
+  "canisters": {
+    "hub_client_canister": {
+      "type": "motoko",
+      "src": "hub_client_canister/src/main.mo"
+    },
+    "wallet_canister": {
+      "type": "motoko",
+      "src": "wallet_canister/src/main.mo",
+      "features": ["http_requests"]
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
+  "version": 1
+}

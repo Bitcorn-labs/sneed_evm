@@ -1,0 +1,11 @@
+my_project/
+├── dfx.json
+├── README.md
+├── hub_client_canister/
+│   ├── hub.did
+│   └── src/
+│       └── main.mo
+└── wallet_canister/
+    ├── mops.toml
+    └── src/
+        └── main.mo

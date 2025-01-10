@@ -1,0 +1,6 @@
+[package]
+name = "wallet_canister"
+version = "0.1.0"
+
+[dependencies]
+encoding.mo = "github.com/aviate-labs/encoding.mo"
