@@ -1,8 +1,9 @@
 # sneed_evm
-sneed evm interface and handler.
-please thank you bitomni thank your icdevs thank your sneeds
 # multi canister approach to bridging icrcs to evm with a handler canister
-
+sneed evm interface and handler.
+thank your bitomni 
+thank your icdevs
+thank your sneeds
 This project includes:
 
 1. **hub_client_canister**  
