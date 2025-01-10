@@ -7,7 +7,7 @@ thank your sneeds
 This project includes:
 
 1. **hub_client_canister**  
-   - Calls an existing Bridge canister via `hub.did` to move ICRC tokens from the IC to an EVM chain.
+   - Calls an existing Bridge canister via `hub.did` to move ICRC tokens from the IC to base/bnb/sui chain.
 
 2. **wallet_canister**  
    - Owns an EVM address (via the IC’s ECDSA).
@@ -33,7 +33,7 @@ Hub canister id:
 
 target_chain_id: 
 - Mainnet: base
-- Testnet: base_sepolia”
+- Testnet: base_sepolia
 
 # Bridge ICRC tokens
 dfx canister call hub_client_canister bridgeICRCToken '(
