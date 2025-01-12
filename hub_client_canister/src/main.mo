@@ -63,7 +63,7 @@ actor {
   stable var env : DeploymentEnv = #Testnet;
 
   // A minimal blacklist for demonstration
-  stable var blacklistedAddresses : [Text] = ["bad-actor-1", "bad-actor-2"];
+  stable var blacklistedAddresses : [Text] = ["poopoo", "peepee"];
 
   public shared({caller}) func setDeploymentEnv(newEnv : DeploymentEnv) : async () {
     env := newEnv;
