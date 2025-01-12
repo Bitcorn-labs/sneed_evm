@@ -23,8 +23,6 @@ func getTargetChainId(env : DeploymentEnv) : Text {
   }
 };
 
-// 2) Minimal ICRC-1 interface snippet
-//    We assume the token canister has `icrc1_transfer(...)` and possibly `icrc1_balance_of(...)`.
 module ICRC1 {
   public type BalanceOfArgs = {
     owner : blob;
