@@ -21,8 +21,6 @@ module EVMRPC {
   };
 
   public type Service = actor {
-    /// Calls "eth_sendRawTransaction" with the raw signed tx
-    /// Returns the transaction hash or an error
     eth_sendRawTransaction : (
       RpcServices,
       ?{
@@ -71,7 +69,6 @@ stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "Key_1";
 
-// Replace with your actual EVM RPC canister principal:
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
 
 actor {
