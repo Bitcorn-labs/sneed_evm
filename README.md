@@ -84,6 +84,7 @@ dfx canister call wallet_canister sendErc20 '(
 dfx canister call wallet_canister doEthereumMintNFT '( ... )'
 
 # Call Baseswap Smart Contract
+base chain id: 8453
 call contract at 0xde151d5c92bfaa288db4b67c21cd55d5826bcc93 by providing:
 The function signature (methodSig),
 The ABI arguments (args),
