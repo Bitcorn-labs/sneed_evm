@@ -280,4 +280,106 @@ actor {
     };
     return await eip1559Call(txParams);
   };
+
+ 
+// 1) baseswap functions  ////////////////////////////
+public type BaseCallParams = {
+  chainId : Nat;             // e.g. 8453 for Base mainnet
+  gasLimit : Nat;            // e.g. 300000
+  maxFeePerGas : Nat;        // e.g. 2000000000
+  maxPriorityFeePerGas : Nat;// e.g. 1500000000
+  derivationPath : Blob;     // your derivation path
+  methodSig : Text;          // e.g. "someMethod(uint256,address)"
+  args : [ABI.Value];        // ABI-encoded arguments
+};
+
+///////////////////////////////////////////////////////////////////
+// 2) The function that calls the proxy contract
+public shared({caller}) func callBaseProxyContract(
+  p : BaseCallParams
+) : async Result.Result<Text, TxError> {
+  // Optional: check that only the owner can call
+  if (caller != owner) {
+    return #err(#NotOwner);
+  };
+
+  // The specific Base proxy contract address
+  let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
+
+  // 1) Encode the function call using Aviate Labs ABI
+  let callData = ABI.encodeFunctionCall(p.methodSig, p.args);
+
+  // 2) Build your EIP-1559 transaction parameters
+  let eipParams : Eip1559Params = {
+    to = contractAddr;
+    value = 0;                    // sending 0 base-ETH
+    data = callData;
+    gasLimit = p.gasLimit;
+    maxFeePerGas = p.maxFeePerGas;
+    maxPriorityFeePerGas = p.maxPriorityFeePerGas;
+    chainId = p.chainId;
+    derivationPath = p.derivationPath;
+  };
+
+  let #ok(msgHash) = EVM.Transaction1559.getMessageToSign({
+    chainId = Nat64.fromNat(p.chainId);
+    nonce = Nat64.fromNat(nonce);
+    maxPriorityFeePerGas = Nat64.fromNat(p.maxPriorityFeePerGas);
+    gasLimit = Nat64.fromNat(p.gasLimit);
+    maxFeePerGas = Nat64.fromNat(p.maxFeePerGas);
+    to = p.to;
+    value = p.value;
+    data = "0x" # Hex.encode(p.data);
+    accessList = [];
+    r = "0x00";
+    s = "0x00";
+    v = "0x00";
+  }) else {
+    return #err(#GenericError("Failed to build unsigned EIP-1559 transaction"));
+  };
+
+  // 4) Sign with ECDSA from the management canister
+  let mgmt = actor(Prim.managementCanister()) : actor {
+    ecdsa_sign : shared {
+      key_name : Text;
+      derivation_path : [Blob];
+      message_hash : Blob;
+    } -> ( { signature : Blob } )
+  };
+  let signRes = await mgmt.ecdsa_sign({
+    key_name = ecdsaKeyName;
+    derivation_path = [p.derivationPath];
+    message_hash = Blob.fromArray(msgHash);
+  });
+  let signature = signRes.signature;
+  if (signature.size() != 64) {
+    return #err(#InvalidSignature);
+  };
+
+  // 5) Combine signature -> final raw transaction
+  let #ok(finalTx) = EVM.Transaction1559.signAndSerialize({
+    chainId = Nat64.fromNat(p.chainId);
+    nonce = Nat64.fromNat(nonce);
+    maxPriorityFeePerGas = Nat64.fromNat(p.maxPriorityFeePerGas);
+    gasLimit = Nat64.fromNat(p.gasLimit);
+    maxFeePerGas = Nat64.fromNat(p.maxFeePerGas);
+    to = p.to;
+    value = p.value;
+    data = "0x" # Hex.encode(p.data);
+    accessList = [];
+    r = "0x00";
+    s = "0x00";
+    v = "0x00";
+  }, Blob.toArray(signature), [0x04], null) else {
+    return #err(#GenericError("Failed to sign & serialize EIP-1559 transaction"));
+  };
+  let rawTx = Hex.encode(finalTx.1);
+
+  // 6) Send the rawTx to the EVM RPC canister
+  return await sendToEvmRpc(rawTx);
+  };
 }
+
+
+
+
