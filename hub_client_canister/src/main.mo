@@ -56,7 +56,6 @@ module ICRC1 {
 
 actor {
 
-  // Store environment in stable var
   stable var env : DeploymentEnv = #Testnet;
 
   stable var blacklistedAddresses : [Text] = ["poopoo", "peepee"];
