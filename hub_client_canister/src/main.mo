@@ -64,13 +64,11 @@ actor {
     env := newEnv;
   };
 
-  // B) Return an actor reference to the real Hub canister
   private func hubActor() : Hub.service {
     let pid = getHubCanisterId(env);
     return actor(pid) : Hub.service;
   };
 
-  /// Bridge ICRC tokens from IC to Base chain using the Hub's `bridge(...)`
   public shared(msg) func bridgeICRCToken(
     tokenPid : principal,
     fromTxId : ?Text,
