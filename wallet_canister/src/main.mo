@@ -72,7 +72,7 @@ public type RemoteNFTPointer = {
 
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
-stable var ecdsaKeyName : Text = "dfx_test_key";
+stable var ecdsaKeyName : Text = "key_1;
 
 // Replace with your actual EVM RPC canister principal:
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
