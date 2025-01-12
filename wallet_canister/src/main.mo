@@ -8,13 +8,10 @@ import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
 
 
-//1) EVM RPC Canister Interface
 module EVMRPC {
   public type RpcServices = {
-    // Add fields if needed for your configuration
   };
 
-  // The result variant from the EVM RPC canister's "eth_sendRawTransaction"
   public type EthSendRawTransactionResult = variant {
     Ok : opt text;
     NonceTooLow;
@@ -79,9 +76,6 @@ stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai
 
 actor {
 
-  //
-  // A) Basic Owner / Admin
-  //
   public shared({caller}) func setOwner(newOwner : Principal) : async () {
     if (caller != owner) { return; }
     owner := newOwner;
@@ -91,9 +85,6 @@ actor {
     return owner;
   }
 
-  //
-  // B) EVM Address Derivation
-  //
   public shared(query) func getEvmAddress() : async Text {
     let mgmtActor = actor(Prim.managementCanister()) : actor {
       ecdsa_public_key : shared {
@@ -116,9 +107,7 @@ actor {
     return "0x" # Hex.encode(addrBytes);
   };
 
-  //
-  // C) Nonce Management
-  //
+  // Nonce Management
   private func getNextNonce(path : Blob) : Nat {
     let idx = List.findIndex<Nat>(nonceMap, func((k, _v)) { k == path });
     if (idx == null) {
@@ -131,9 +120,6 @@ actor {
     }
   }
 
-  //
-  // D) EIP-1559 Transaction
-  //
   public type Eip1559Params = {
     to : Text; 
     value : Nat; 
@@ -204,7 +190,6 @@ actor {
     };
     let rawTx = Hex.encode(finalTx.1);
 
-    // Now call the EVM RPC canister to actually send
     return await sendToEvmRpc(rawTx);
   };
 
