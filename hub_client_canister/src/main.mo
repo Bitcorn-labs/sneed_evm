@@ -230,7 +230,7 @@ actor {
     fee : ?Nat
   ) : async ICRC1.TransferResult {
 
-    // Validate
+    Debug.assert(is_owner(msg.caller));
     let canSend = await validate_send_icrc1_tokens(tokenCanister, from, to, amount);
     if (!canSend) {
       return #err(#GenericError({
@@ -259,6 +259,12 @@ actor {
   // Utility => convert textual "account" => blob
   private func textToBlob(acc : Text) : Blob {
     return Text.encodeUtf8(acc);
+  };
+
+  private func is_owner(principal : Principal) : Bool { 
+  if (Principal.isController(principal)) { return true; };
+  if (Principal.fromText("sneed-gov-here") == principal) { return true; };
+  return false;
   };
 
   // A debug helper
