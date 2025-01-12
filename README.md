@@ -91,5 +91,19 @@ The EIP-1559 gas parameters,
 A chain ID for Base (8453),
 The same derivation path used for signing.
 
+dfx canister call wallet_canister eip1559Call '(
+  record {
+    to = "0xRecipient";
+    value = 1000000000000000000:nat;
+    data = blob "anyFunctionData";
+    gasLimit = 300000:nat;
+    maxFeePerGas = 2000000000:nat;
+    maxPriorityFeePerGas = 1500000000:nat;
+    chainId = 8453:nat;
+    derivationPath = blob "somePath";
+  }
+)'
+
+
 
 
