@@ -1,4 +1,4 @@
-my_project/
+sneed_evm/
 ├── dfx.json
 ├── README.md
 ├── hub_client_canister/
