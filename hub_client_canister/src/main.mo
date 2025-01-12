@@ -6,7 +6,6 @@ public type DeploymentEnv = {
   #Testnet;
 };
 
-
 func getHubCanisterId(env : DeploymentEnv) : principal {
   switch (env) {
     case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
