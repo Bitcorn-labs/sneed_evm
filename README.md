@@ -23,7 +23,7 @@ This project includes:
 
 dfx deploy
 
-hub_client_canister
+# hub_client_canister
 # Switch environment if desired (Mainnet vs. Testnet)
 dfx canister call hub_client_canister setDeploymentEnv '(variant { Testnet })'
 
@@ -44,11 +44,21 @@ dfx canister call hub_client_canister bridgeICRCToken '(
   1000000:nat
 )'
 
-wallet_canister
-# Check your EVM address
+# Send an irc1 token
+dfx canister call hub_client_canister send_icrc1_tokens '(
+  principal "<ICRC1_TOKEN_CANISTER>",
+  "myFromAddress",
+  "myToAddress",
+  500000:nat,
+  null,               # fromSubaccount
+  null                # fee
+)'
+
+# wallet_canister
+# Check your EVM address 
 dfx canister call wallet_canister getEvmAddress
 
-# Send an ERC-20 token
+# Send an ERC-20 token 
 dfx canister call wallet_canister sendErc20 '(
   principal "<EVM_RPC_CANISTER>",
   record {},
@@ -61,15 +71,6 @@ dfx canister call wallet_canister sendErc20 '(
   variant { Ethereum = null },
   blob "yourPublicKey"
 )'
-
-# send icrc1 tokens from this canister to another address
-dfx canister call hub_client_canister send_icrc1_tokens '(
-  principal "<ICRC1_TOKEN_CANISTER>",
-  "aaaa-bbbb-cc",
-  "ddd-eee-fff",
-  100000000:nat
-)'
-
 
 # Mint an NFT
 dfx canister call wallet_canister doEthereumMintNFT '( ... )'
