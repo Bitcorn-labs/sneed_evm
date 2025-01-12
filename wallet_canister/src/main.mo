@@ -75,7 +75,7 @@ stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "dfx_test_key";
 
 // Replace with your actual EVM RPC canister principal:
-stable var evmRpcCanisterId : Principal = principal "dfinityrpccanister_id"; 
+stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
 
 actor {
 
