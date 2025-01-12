@@ -10,6 +10,12 @@
       "features": ["http_requests"]
     }
   },
+  "canisters": {
+    "evm_rpc": {
+      "type": "pull",
+      "id": "7hfb6-caaaa-aaaar-qadga-cai",
+    }
+  },
   "networks": {
     "local": {
       "bind": "127.0.0.1:8000",
