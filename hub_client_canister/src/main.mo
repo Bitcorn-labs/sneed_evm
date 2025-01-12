@@ -59,7 +59,6 @@ module ICRC1 {
   };
 }
 
-// 3) The main actor
 actor {
 
   // A) Store environment in stable var
@@ -77,11 +76,6 @@ actor {
     let pid = getHubCanisterId(env);
     return actor(pid) : Hub.service;
   };
-
-  //
-  // ---------------------------
-  // 1) Bridge Methods
-  // ---------------------------
 
   /// Bridge ICRC tokens from IC to Base chain using the Hub's `bridge(...)`
   public shared(msg) func bridgeICRCToken(
@@ -110,11 +104,6 @@ actor {
 
     return await hubActor().bridge(bridgeArgs);
   };
-
-  //
-  // ---------------------------
-  // 2) Additional Hub functions
-  // ---------------------------
 
   public shared(msg) func add_cached_events(events : [Hub.CachedRelayerEvent]) : async Hub.Result {
     return await hubActor().add_cached_events(events);
@@ -204,11 +193,6 @@ actor {
     return await hubActor().update_token_chain_address(args);
   };
 
-  //
-  // ---------------------------
-  // 3) Real checks for ICRC1 sending
-  // ---------------------------
-  
   // A minimal blacklist, stable var
   // Already declared above => blacklistedAddresses
 
@@ -241,9 +225,6 @@ actor {
     return true;
   };
 
-  //
-  // 4) send_icrc1_tokens with from_subaccount & fee
-  //
   public shared(msg) func send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
