@@ -20,6 +20,14 @@ This project includes:
    ```bash
    dfx start --clean --background
 
+2. **deps evm rpc**
+    Start the local replica
+dfx start --background
+
+Locally deploy the `evm_rpc` canister
+dfx deps pull
+dfx deps init evm_rpc --argument '(record {})'
+dfx deps deploy
 
 dfx deploy
 
