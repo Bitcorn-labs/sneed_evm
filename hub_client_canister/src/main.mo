@@ -10,8 +10,8 @@ public type DeploymentEnv = {
 /// Return the Hub canister principal for each environment
 func getHubCanisterId(env : DeploymentEnv) : principal {
   switch (env) {
-    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };  // mainnet
-    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };  // testnet
+    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
+    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };   // testnet
   }
 };
 
@@ -24,8 +24,13 @@ func getTargetChainId(env : DeploymentEnv) : Text {
 };
 
 // 2) Minimal ICRC-1 interface snippet
-//    We assume the token canister has `icrc1_transfer(...)`.
+//    We assume the token canister has `icrc1_transfer(...)` and possibly `icrc1_balance_of(...)`.
 module ICRC1 {
+  public type BalanceOfArgs = {
+    owner : blob;
+    subaccount : ?blob;
+  };
+
   public type TransferArgs = {
     from_subaccount : ?blob;
     to : blob;
@@ -49,29 +54,36 @@ module ICRC1 {
   public type TransferResult = variant { Ok : nat; Err : TransferError };
 
   public type ICRC1Service = actor {
+    icrc1_balance_of : (BalanceOfArgs) -> (nat) query;
     icrc1_transfer : (TransferArgs) -> (TransferResult);
-    // ... possibly other methods: icrc1_balance_of, etc.
   };
 }
 
 // 3) The main actor
 actor {
 
+  // A) Store environment in stable var
   stable var env : DeploymentEnv = #Testnet;
+
+  // A minimal blacklist for demonstration
+  stable var blacklistedAddresses : [Text] = ["bad-actor-1", "bad-actor-2"];
 
   public shared({caller}) func setDeploymentEnv(newEnv : DeploymentEnv) : async () {
     env := newEnv;
   };
 
-  // Return an actor reference to the real Hub canister
+  // B) Return an actor reference to the real Hub canister
   private func hubActor() : Hub.service {
     let pid = getHubCanisterId(env);
     return actor(pid) : Hub.service;
   };
 
   //
-  // A) Bridge ICRC tokens from IC to Base chain using the Hub's `bridge(...)`
-  //
+  // ---------------------------
+  // 1) Bridge Methods
+  // ---------------------------
+
+  /// Bridge ICRC tokens from IC to Base chain using the Hub's `bridge(...)`
   public shared(msg) func bridgeICRCToken(
     tokenPid : principal,
     fromTxId : ?Text,
@@ -81,9 +93,11 @@ actor {
   ) : async Hub.Result_1 {
 
     let chainId = getTargetChainId(env);
-    Debug.print("Bridging tokens => chain=" # chainId
+    Debug.print(
+      "Bridging tokens => chain=" # chainId
       # ", recipient=" # recipientEvmAddress
-      # ", amount=" # Nat.toText(amount));
+      # ", amount=" # Nat.toText(amount)
+    );
 
     let bridgeArgs : Hub.BridgeArgs = {
       token = tokenPid;
@@ -97,87 +111,187 @@ actor {
     return await hubActor().bridge(bridgeArgs);
   };
 
-  // Additional Hub calls if you wish
-  public shared(msg) func addChains(chains : [Hub.AddChainArgs]) : async Hub.Result {
+  //
+  // ---------------------------
+  // 2) Additional Hub functions
+  // ---------------------------
+
+  public shared(msg) func add_cached_events(events : [Hub.CachedRelayerEvent]) : async Hub.Result {
+    return await hubActor().add_cached_events(events);
+  };
+
+  public shared(msg) func add_chains(chains : [Hub.AddChainArgs]) : async Hub.Result {
     return await hubActor().add_chains(chains);
   };
 
+  public shared(msg) func add_token_chain(args : Hub.AddTokenChainArgs) : async Hub.Result {
+    return await hubActor().add_token_chain(args);
+  };
+
+  public shared(msg) func add_tokens(tokens : [Hub.AddTokenArgs]) : async Hub.Result {
+    return await hubActor().add_tokens(tokens);
+  };
+
+  public shared(msg) func claimed(args : Hub.ClaimedArg) : async Hub.Result_2 {
+    return await hubActor().claimed(args);
+  };
+
+  public shared(msg) func delete_cached_event(eventId : Text) : async Hub.Result {
+    return await hubActor().delete_cached_event(eventId);
+  };
+
+  public shared(query) func get_admin() : async principal {
+    return await hubActor().get_admin();
+  };
+
+  public shared(msg) func get_assets_by_chain_id(chainId : Text) : async Hub.Result_3 {
+    return await hubActor().get_assets_by_chain_id(chainId);
+  };
+
+  public shared(msg) func get_assets_by_token_pid(tokenPid : principal) : async Hub.Result_3 {
+    return await hubActor().get_assets_by_token_pid(tokenPid);
+  };
+
+  public shared(query) func get_chain(chainId : Text) : async ?Hub.SupportedChain {
+    return await hubActor().get_chain(chainId);
+  };
+
+  public shared(query) func get_histories(args : Hub.GetHistoryRequest) : async Hub.GetHistoryResponse {
+    return await hubActor().get_histories(args);
+  };
+
+  public shared(query) func get_minter_address_of_chain(chainId : Text) : async ?Text {
+    return await hubActor().get_minter_address_of_chain(chainId);
+  };
+
+  public shared(query) func get_protocol_fee_percentage() : async ?Nat16 {
+    return await hubActor().get_protocol_fee_percentage();
+  };
+
+  public shared(query) func get_support_chains() : async [Hub.SupportedChain] {
+    return await hubActor().get_support_chains();
+  };
+
+  public shared(query) func get_support_tokens() : async [Hub.SupportedToken] {
+    return await hubActor().get_support_tokens();
+  };
+
+  public shared(msg) func pause() : async Hub.Result {
+    return await hubActor().pause();
+  };
+
+  public shared(msg) func resume() : async Hub.Result {
+    return await hubActor().resume();
+  };
+
+  public shared(msg) func set_protocol_fee_percentage(fee : Nat16) : async Hub.Result {
+    return await hubActor().set_protocol_fee_percentage(fee);
+  };
+
+  public shared(query) func sync_histories(args : Hub.SyncHistoryRequest) : async Hub.SyncHistoryResponse {
+    return await hubActor().sync_histories(args);
+  };
+
+  public shared(msg) func update_chain(args : Hub.AddChainArgs) : async Hub.Result {
+    return await hubActor().update_chain(args);
+  };
+
+  public shared(msg) func update_token(args : Hub.AddTokenArgs) : async Hub.Result {
+    return await hubActor().update_token(args);
+  };
+
+  public shared(msg) func update_token_chain_address(args : Hub.AddTokenChainArgs) : async Hub.Result {
+    return await hubActor().update_token_chain_address(args);
+  };
+
   //
-  // B) New: validate_send_icrc1_tokens(...) 
-  //    A generic function to check if a send is feasible (balance, subaccount, etc.)
-  //    In practice, you might do more logic: check local state, check blacklists, etc.
-  //
+  // ---------------------------
+  // 3) Real checks for ICRC1 sending
+  // ---------------------------
+  
+  // A minimal blacklist, stable var
+  // Already declared above => blacklistedAddresses
+
+  // Validate function to ensure "from" has enough balance, "to" not blacklisted, etc.
   public shared(query) func validate_send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
     to : Text,
     amount : Nat
   ) : async Bool {
-    // This function is a "stub" for your custom checks. For example:
-    // 1) We might call "icrc1_balance_of" to see if `from` has enough balance.
-    // 2) We might check if "to" is not blacklisted, if any local rules are satisfied, etc.
-    Debug.print("validate_send_icrc1_tokens => from=" # from # ", to=" # to # ", amount=" # Nat.toText(amount));
-    
-    // For demonstration, we just return `true`. Replace with real checks.
+    // 1) blacklisted check
+    if (blacklistedAddresses.contains(to)) {
+      Debug.print("Address blacklisted => " # to);
+      return false;
+    };
+    // 2) disallow from == to
+    if (from == to) {
+      Debug.print("Cannot send to self => " # from);
+      return false;
+    };
+    // 3) check balance
+    let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
+    let fromBlob = textToBlob(from);
+    let bal = await icrc1Actor.icrc1_balance_of({owner = fromBlob; subaccount = null});
+    Debug.print("Balance of " # from # " => " # Nat.toText(bal));
+    if (bal < amount) {
+      Debug.print("Not enough balance => " # Nat.toText(bal) # " < " # Nat.toText(amount));
+      return false;
+    };
     return true;
   };
 
   //
-  // C) New: send_icrc1_tokens(...) 
-  //    Actually calls the ICRC-1 token canister's `icrc1_transfer` to move tokens.
+  // 4) send_icrc1_tokens with from_subaccount & fee
   //
   public shared(msg) func send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
     to : Text,
-    amount : Nat
+    amount : Nat,
+    fromSubaccount : ?Text,
+    fee : ?Nat
   ) : async ICRC1.TransferResult {
-    // 1) Validate before sending
+
+    // Validate
     let canSend = await validate_send_icrc1_tokens(tokenCanister, from, to, amount);
     if (!canSend) {
-      return #err(#GenericError({ 
-        message = "Validation failed, cannot send", 
-        error_code = 200 
+      return #err(#GenericError({
+        message = "Validation failed, cannot send",
+        error_code = 200
       }));
     };
 
-    // 2) Build the ICRC-1 actor
+    // Build ICRC1 actor
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
 
-    // 3) Construct a minimal TransferArgs
-    //    "from_subaccount" is optional, you may pass an actual subaccount if needed
-    //    "to" is a "blob" representing the address (like an Account identifier).
-    //    We'll do a simple approach: from and to are textual => decode them if needed.
+    // subaccount => if provided, encode
+    let subAcc = switch fromSubaccount {
+      case null { null };
+      case (?sub) { ?Text.encodeUtf8(sub) };
+    };
+
     let tArgs : ICRC1.TransferArgs = {
-      from_subaccount = null;
-      to = textToBlob(to); // Convert textual "to" into a blob account
-      fee = null; 
+      from_subaccount = subAcc;
+      to = textToBlob(to);
+      fee = fee;
       created_at_time = null;
       memo = null;
       amount = amount;
     };
 
-    // 4) Call icrc1_transfer
     let result = await icrc1Actor.icrc1_transfer(tArgs);
     Debug.print("ICRC1 transfer result => " # debug_show(result));
     return result;
   };
 
-  //
-  // Utility to convert textual "account" => blob if your standard needs it.
-  // Or if your token canister can handle textual addresses, adapt accordingly.
-  //
+  // Utility => convert textual "account" => blob
   private func textToBlob(acc : Text) : Blob {
-    // Example: If your ICRC-1 can accept textual addresses, you might skip this step.
-    // Or if you store an 32-byte "principal + subaccount," you'd parse it.
-    // We'll do a naive approach: encode as UTF-8
     return Text.encodeUtf8(acc);
   };
 
-  //
-  // D) Example read method: getHubAdmin
-  //
-  public shared(msg) func getHubAdmin() : async principal {
-    return await hubActor().get_admin();
+  // A debug helper
+  private func debug_show<T>(x : T) : text {
+    return Debug.printable(x);
   };
 }
