@@ -245,7 +245,6 @@ actor {
     return result;
   };
 
-  // Utility => convert textual "account" => blob
   private func textToBlob(acc : Text) : Blob {
     return Text.encodeUtf8(acc);
   };
