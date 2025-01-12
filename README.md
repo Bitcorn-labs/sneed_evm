@@ -7,7 +7,7 @@ thank your sneeds
 This project includes:
 
 1. **hub_client_canister**  
-   - Calls an existing Bridge canister via `hub.did` to move ICRC tokens from the IC to base/bnb/sui chain.
+   - Calls an existing Bridge canister via `hub.did` to move ICRC tokens from the IC to base.
 
 2. **wallet_canister**  
    - Owns an EVM address (via the IC’s ECDSA).
@@ -20,6 +20,14 @@ This project includes:
    ```bash
    dfx start --clean --background
 
+2. **deps evm rpc**
+    Start the local replica
+dfx start --background
+
+Locally deploy the `evm_rpc` canister
+dfx deps pull
+dfx deps init evm_rpc --argument '(record {})'
+dfx deps deploy
 
 dfx deploy
 
@@ -82,6 +90,20 @@ The ABI arguments (args),
 The EIP-1559 gas parameters,
 A chain ID for Base (8453),
 The same derivation path used for signing.
+
+dfx canister call wallet_canister eip1559Call '(
+  record {
+    to = "0xRecipient";
+    value = 1000000000000000000:nat;
+    data = blob "anyFunctionData";
+    gasLimit = 300000:nat;
+    maxFeePerGas = 2000000000:nat;
+    maxPriorityFeePerGas = 1500000000:nat;
+    chainId = 8453:nat;
+    derivationPath = blob "somePath";
+  }
+)'
+
 
 
 

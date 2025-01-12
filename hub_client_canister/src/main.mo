@@ -1,13 +1,11 @@
 import Hub "hub_client_canister/hub.did";
 import Debug "mo:base/Debug";
 
-// 1) Environment type for bridging (Mainnet vs. Testnet)
 public type DeploymentEnv = {
   #Mainnet;
   #Testnet;
 };
 
-/// Return the Hub canister principal for each environment
 func getHubCanisterId(env : DeploymentEnv) : principal {
   switch (env) {
     case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
@@ -15,7 +13,6 @@ func getHubCanisterId(env : DeploymentEnv) : principal {
   }
 };
 
-/// Return the chain ID recognized by the Hub
 func getTargetChainId(env : DeploymentEnv) : Text {
   switch (env) {
     case (#Mainnet) { "base" };
@@ -59,7 +56,6 @@ module ICRC1 {
 
 actor {
 
-  // Store environment in stable var
   stable var env : DeploymentEnv = #Testnet;
 
   stable var blacklistedAddresses : [Text] = ["poopoo", "peepee"];
@@ -68,13 +64,11 @@ actor {
     env := newEnv;
   };
 
-  // B) Return an actor reference to the real Hub canister
   private func hubActor() : Hub.service {
     let pid = getHubCanisterId(env);
     return actor(pid) : Hub.service;
   };
 
-  /// Bridge ICRC tokens from IC to Base chain using the Hub's `bridge(...)`
   public shared(msg) func bridgeICRCToken(
     tokenPid : principal,
     fromTxId : ?Text,
@@ -190,10 +184,6 @@ actor {
     return await hubActor().update_token_chain_address(args);
   };
 
-  // A minimal blacklist, stable var
-  // Already declared above => blacklistedAddresses
-
-  // Validate function to ensure "from" has enough balance, "to" not blacklisted, etc.
   public shared(query) func validate_send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
@@ -239,7 +229,6 @@ actor {
       }));
     };
 
-    // Build ICRC1 actor
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
 
     let tArgs : ICRC1.TransferArgs = {
@@ -256,7 +245,6 @@ actor {
     return result;
   };
 
-  // Utility => convert textual "account" => blob
   private func textToBlob(acc : Text) : Blob {
     return Text.encodeUtf8(acc);
   };
