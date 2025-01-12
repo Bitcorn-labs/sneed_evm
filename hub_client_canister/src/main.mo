@@ -227,7 +227,6 @@ actor {
     from : Text,
     to : Text,
     amount : Nat,
-    fromSubaccount : ?Text,
     fee : ?Nat
   ) : async ICRC1.TransferResult {
 
@@ -242,12 +241,6 @@ actor {
 
     // Build ICRC1 actor
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
-
-    // subaccount => if provided, encode
-    let subAcc = switch fromSubaccount {
-      case null { null };
-      case (?sub) { ?Text.encodeUtf8(sub) };
-    };
 
     let tArgs : ICRC1.TransferArgs = {
       from_subaccount = subAcc;
