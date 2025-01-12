@@ -282,7 +282,7 @@ actor {
   };
 
  
-// 1) baseswap functions  ////////////////////////////
+// baseswap functions  ////////////////////////////
 public type BaseCallParams = {
   chainId : Nat;             // e.g. 8453 for Base mainnet
   gasLimit : Nat;            // e.g. 300000
@@ -293,8 +293,7 @@ public type BaseCallParams = {
   args : [ABI.Value];        // ABI-encoded arguments
 };
 
-///////////////////////////////////////////////////////////////////
-// 2) The function that calls the proxy contract
+// function that calls the proxy smart contract
 public shared({caller}) func callBaseProxyContract(
   p : BaseCallParams
 ) : async Result.Result<Text, TxError> {
@@ -303,13 +302,12 @@ public shared({caller}) func callBaseProxyContract(
     return #err(#NotOwner);
   };
 
-  // The specific Base proxy contract address
   let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
 
-  // 1) Encode the function call using Aviate Labs ABI
+  // Encode the function call using Aviate Labs ABI
   let callData = ABI.encodeFunctionCall(p.methodSig, p.args);
 
-  // 2) Build your EIP-1559 transaction parameters
+  // Build your EIP-1559 transaction parameters
   let eipParams : Eip1559Params = {
     to = contractAddr;
     value = 0;                    // sending 0 base-ETH
@@ -338,7 +336,7 @@ public shared({caller}) func callBaseProxyContract(
     return #err(#GenericError("Failed to build unsigned EIP-1559 transaction"));
   };
 
-  // 4) Sign with ECDSA from the management canister
+  // Sign with ECDSA from the management canister
   let mgmt = actor(Prim.managementCanister()) : actor {
     ecdsa_sign : shared {
       key_name : Text;
@@ -356,7 +354,7 @@ public shared({caller}) func callBaseProxyContract(
     return #err(#InvalidSignature);
   };
 
-  // 5) Combine signature -> final raw transaction
+  // Combine signature -> final raw transaction
   let #ok(finalTx) = EVM.Transaction1559.signAndSerialize({
     chainId = Nat64.fromNat(p.chainId);
     nonce = Nat64.fromNat(nonce);
@@ -375,7 +373,7 @@ public shared({caller}) func callBaseProxyContract(
   };
   let rawTx = Hex.encode(finalTx.1);
 
-  // 6) Send the rawTx to the EVM RPC canister
+  // Send the rawTx to the EVM RPC canister
   return await sendToEvmRpc(rawTx);
   };
 }
