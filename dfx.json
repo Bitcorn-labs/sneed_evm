@@ -8,18 +8,12 @@
       "type": "motoko",
       "src": "wallet_canister/src/main.mo",
       "features": ["http_requests"]
+      "ecdsa_signing": {
+      "key_name": "key_1"
     },
-  "canisters": {
     "evm_rpc": {
       "type": "pull",
       "id": "7hfb6-caaaa-aaaar-qadga-cai",
-    },
-  "canisters": {
-    "wallet_canister": {
-      "type": "motoko",
-      "src": "src/wallet_canister/main.mo",
-      "ecdsa_signing": {
-        "key_name": "key_1"
     },
   "networks": {
     "local": {
