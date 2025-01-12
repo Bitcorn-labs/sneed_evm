@@ -186,7 +186,6 @@ actor {
     return await hubActor().update_token_chain_address(args);
   };
 
-  // Validate function to ensure "from" has enough balance, "to" not blacklisted, etc.
   public shared(query) func validate_send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
@@ -232,7 +231,6 @@ actor {
       }));
     };
 
-    // Build ICRC1 actor
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
 
     let tArgs : ICRC1.TransferArgs = {
