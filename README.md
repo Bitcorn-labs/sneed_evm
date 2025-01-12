@@ -62,5 +62,14 @@ dfx canister call wallet_canister sendErc20 '(
   blob "yourPublicKey"
 )'
 
+# send icrc1 tokens from this canister to another address
+dfx canister call hub_client_canister send_icrc1_tokens '(
+  principal "<ICRC1_TOKEN_CANISTER>",
+  "aaaa-bbbb-cc",
+  "ddd-eee-fff",
+  100000000:nat
+)'
+
+
 # Mint an NFT
 dfx canister call wallet_canister doEthereumMintNFT '( ... )'
