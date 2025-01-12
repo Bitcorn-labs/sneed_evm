@@ -190,9 +190,6 @@ actor {
     return await hubActor().update_token_chain_address(args);
   };
 
-  // A minimal blacklist, stable var
-  // Already declared above => blacklistedAddresses
-
   // Validate function to ensure "from" has enough balance, "to" not blacklisted, etc.
   public shared(query) func validate_send_icrc1_tokens(
     tokenCanister : principal,
