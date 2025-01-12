@@ -59,10 +59,9 @@ module ICRC1 {
 
 actor {
 
-  // A) Store environment in stable var
+  // Store environment in stable var
   stable var env : DeploymentEnv = #Testnet;
 
-  // A minimal blacklist for demonstration
   stable var blacklistedAddresses : [Text] = ["poopoo", "peepee"];
 
   public shared({caller}) func setDeploymentEnv(newEnv : DeploymentEnv) : async () {
