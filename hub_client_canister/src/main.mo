@@ -1,13 +1,12 @@
 import Hub "hub_client_canister/hub.did";
 import Debug "mo:base/Debug";
 
-// 1) Environment type for bridging (Mainnet vs. Testnet)
 public type DeploymentEnv = {
   #Mainnet;
   #Testnet;
 };
 
-/// Return the Hub canister principal for each environment
+
 func getHubCanisterId(env : DeploymentEnv) : principal {
   switch (env) {
     case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
@@ -15,7 +14,6 @@ func getHubCanisterId(env : DeploymentEnv) : principal {
   }
 };
 
-/// Return the chain ID recognized by the Hub
 func getTargetChainId(env : DeploymentEnv) : Text {
   switch (env) {
     case (#Mainnet) { "base" };
