@@ -3,6 +3,7 @@ import Principal "mo:base/Principal";
 import Prim "mo:prim";
 import Hash "mo:base/Hash";
 
+// Mops dependencies (adjust paths if your Mops setup differs)
 import Vector "mo:vector/Vector";
 import Candy "mo:candy/Candy";
 import Map "mo:map/Map";
@@ -26,7 +27,9 @@ import ABI "mo:encoding.mo/abi";
 import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
 
+///////////////////////////////////
 // 1) EVM RPC
+///////////////////////////////////
 module EVMRPC {
   public type RpcServices = {};
   public type EthSendRawTransactionResult = variant {
@@ -53,7 +56,9 @@ module EVMRPC {
     };
 }
 
-// 2) Error + Result
+///////////////////////////////////
+// 2) Errors + Result
+///////////////////////////////////
 public type TxError = variant {
   NotOwner;
   InvalidSignature;
@@ -71,7 +76,11 @@ public module Result {
   };
 }
 
-// 3) Network + NFT
+///////////////////////////////////
+// 3) Env + Network + NFT
+///////////////////////////////////
+public type DeploymentEnv = { #Mainnet; #Testnet };
+
 public type Network = variant {
   Ethereum : opt Nat; 
   Base : opt Nat;
@@ -83,7 +92,9 @@ public type RemoteNFTPointer = {
   network : Network;
 };
 
+///////////////////////////////////
 // 4) Hub bridging snippet
+///////////////////////////////////
 module Hub {
   public type BridgeArgs = record {
     token : principal;
@@ -101,17 +112,27 @@ module Hub {
   };
 }
 
-// 5) STABLE VARS
+///////////////////////////////////
+// 5) Stable Vars
+///////////////////////////////////
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "Key_1";
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai";
-stable var hubCanisterPid : Principal = principal "n6ii2-2yaaa-aaaaj-azvia-cai";
+stable var env : DeploymentEnv = #Testnet;
 
-// 6) The Actor
+///////////////////////////////////
+// 6) getHubPrincipal + actor
+///////////////////////////////////
+private func getHubPrincipal(e : DeploymentEnv) : Principal {
+  switch (e) {
+    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };
+    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };
+  }
+}
+
 actor {
 
-  // Private check for ownership (canister controller or stable var "owner")
   private func is_owner(p : Principal) : Bool {
     if (Principal.isController(p)) { return true; }
     if (p == owner) { return true; }
@@ -119,9 +140,18 @@ actor {
   };
 
   public shared({caller}) func setOwner(newOwner : Principal) : async () {
-    if (! is_owner(caller)) { return; }
+    if (!is_owner(caller)) { return; }
     owner := newOwner;
   };
+
+  public shared({caller}) func setEnv(e : DeploymentEnv) : async () {
+    if (!is_owner(caller)) { return; }
+    env := e;
+  };
+
+  public shared(query) func getEnv() : async DeploymentEnv {
+    return env;
+  }
 
   public shared(query) func getOwner() : async Principal {
     return owner;
@@ -190,7 +220,7 @@ actor {
   public shared({caller}) func eip1559Call(
     p : Eip1559Params
   ) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let nonce = getNextNonce(p.derivationPath);
     let #ok(msgHash) = EVM.Transaction1559.getMessageToSign({
       chainId = Nat64.fromNat(p.chainId);
@@ -256,7 +286,7 @@ actor {
     tecdsaSha : Blob;                    
     publicKey : [Nat8];
   }) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let chainId = switch (request.network) {
       case (#Ethereum(val)) {
         switch (val) {
@@ -337,7 +367,7 @@ actor {
     tecdsaSha : Blob;
     publicKey : [Nat8];
   }) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let chainId = switch (request.network) {
       case (#Ethereum(val)) {
         switch (val) {
@@ -428,7 +458,7 @@ actor {
   public shared({caller}) func mintNft(
     p : MintParams
   ) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let chainId = switch (p.pointer.network) {
       case (#Ethereum(null)) { 1 };
       case (#Ethereum(?v)) { v };
@@ -468,7 +498,7 @@ actor {
   public shared({caller}) func sendErc20(
     p : Erc20Params
   ) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let methodSig = "transfer(address,uint256)";
     let callData = ABI.encodeFunctionCall(methodSig, [
       ABI.Value.address(ABI.Address.fromText(p.to)),
@@ -500,7 +530,7 @@ actor {
   public shared({caller}) func callBaseProxyContract(
     p : BaseCallParams
   ) : async Result.Result<Text, TxError> {
-    if (! is_owner(caller)) { return #err(#NotOwner); }
+    if (!is_owner(caller)) { return #err(#NotOwner); }
     let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
     let callData = ABI.encodeFunctionCall(p.methodSig, p.args);
     let eipParams : Eip1559Params = {
@@ -517,7 +547,7 @@ actor {
   };
 
   private func hubActor() : Hub.HubService {
-    return actor(hubCanisterPid) : Hub.HubService;
+    return actor(getHubPrincipal(env)) : Hub.HubService;
   }
 
   public shared({caller}) func bridgeBaseToIcrc(
@@ -527,7 +557,7 @@ actor {
     recipientIcrc : Text,
     amount : Nat
   ) : async Hub.Result_1 {
-    if (! is_owner(caller)) {
+    if (!is_owner(caller)) {
       return #Err(#PermissionDenied);
     };
     let bridgeArgs : Hub.BridgeArgs = {
