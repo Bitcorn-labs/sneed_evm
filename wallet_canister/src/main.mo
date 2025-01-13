@@ -254,6 +254,52 @@ actor {
     return await sendToEvmRpc(rawTx);
   };
 
+   public shared({caller}) func burnBaseToken(
+  chainId : Nat,             // e.g. 8453 for Base mainnet
+  derivationPath : Blob,     // your ECDSA derivation path
+  maxFeePerGas : Nat,        
+  maxPriorityFeePerGas : Nat,
+  gasLimit : Nat,
+  amount : Nat,              // how many tokens to burn
+  targetChain : Text         // e.g. "icp"
+) : async Result.Result<Text, TxError> {
+
+  // Only the owner or a controller can invoke
+  if (!is_owner(caller)) {
+    return #err(#NotOwner);
+  };
+
+  // The contract address for the relayer on Base
+  let relayerContract = "0xDB4270fd1fa025A9403539fA8696092A6451E7FC";
+
+  // Build the method signature and arguments for "burn(uint256,string)" 
+  let methodSig = "burn(uint256,string)";
+
+  // Encode the arguments: [ ABI.Value.uint256(amount), ABI.Value.string(targetChain) ]
+  let callData = ABI.encodeFunctionCall(
+    methodSig,
+    [
+      ABI.Value.uint256(amount),
+      ABI.Value.string(targetChain)
+    ]
+  );
+
+  // Build an EIP-1559 transaction to call that contract
+  let txParams : Eip1559Params = {
+    to = relayerContract;
+    value = 0;                 // no native coin needed
+    data = callData;
+    gasLimit = gasLimit;
+    maxFeePerGas = maxFeePerGas;
+    maxPriorityFeePerGas = maxPriorityFeePerGas;
+    chainId = chainId;
+    derivationPath = derivationPath;
+  };
+
+  // Reuse your existing eip1559Call(...) approach
+  return await eip1559Call(txParams);
+}
+
   public shared({caller}) func makeEthereumValueTrx(request : {
     canisterId : Principal;               
     rpcs : EVMRPC.RpcServices;           
