@@ -33,7 +33,7 @@ module EVMRPC {
     NonceTooHigh;
     InsufficientFunds;
     Other : text;
-  };
+  
   public type Service = actor {
     eth_sendRawTransaction : (
       RpcServices,
