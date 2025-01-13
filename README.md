@@ -117,14 +117,16 @@ dfx canister call wallet_canister makeEthereumValueTrx '(
 )'
 
 **bridge base to ICRC**
-dfx canister call wallet_canister setEnv '(variant { Testnet })'
-dfx canister call wallet_canister bridgeBaseToIcrc '(
-  principal "<TOKEN_PID>",
-  opt null,
-  "0xYourBaseAddress",
-  "icpRecipientAddress",
-  1000000:nat
+dfx canister call wallet_canister burnBaseToken '(
+  8453:nat,                    // chainId for Base
+  blob "yourDerivationPath",
+  2000000000:nat,             // maxFeePerGas
+  1500000000:nat,             // maxPriorityFeePerGas
+  300000:nat,                 // gasLimit
+  1000000:nat,                // amount to burn
+  "icp"                        // target chain
 )'
+
 
 **nfts:**
 -mintnft: calls "mint_icrc99(uint256,address,string)" on an NFT contract.
