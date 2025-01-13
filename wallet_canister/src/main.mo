@@ -2,11 +2,29 @@ import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import Prim "mo:prim";
 import Hash "mo:base/Hash";
+
+import Vector "mo:vector/Vector";
+import Candy "mo:candy/Candy";
+import Map "mo:map/Map";
+import Serde "mo:serde/Serde";
+import SHA3 "mo:sha3/SHA3";
+import SHA2 "mo:sha2/SHA2";
+import TEcdsa "mo:tecdsa/TEcdsa";
+import StableBTreemap "mo:stableheapbtreemap/StableBTreemap";
+import ICRC7 "mo:icrc7-mo/ICRC7";
+import ICRC3 "mo:icrc3-mo/ICRC3";
+import ICRC37 "mo:icrc37-mo/ICRC37";
+import Star "mo:star/Star";
+import LibSecp256k1 "mo:libsecp256k1/LibSecp256k1";
+import RLPRelaxed "mo:rlprelaxed/RlpRelaxed";
+import EVMTxs "mo:evm-txs/EvmTxs";
+import ClassPlus "mo:class-plus/ClassPlus";
+import TimerTool "mo:timer-tool/TimerTool";
+
+// For encoding
 import ABI "mo:encoding.mo/abi";
 import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
-import Buffer "mo:buffer/Buffer";
-import SHA3 "mo:crypto/sha3";
 
 // 1) EVM RPC
 module EVMRPC {
