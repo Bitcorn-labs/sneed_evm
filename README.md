@@ -85,25 +85,51 @@ dfx canister call wallet_canister doEthereumMintNFT '( ... )'
 
 # Call Baseswap Smart Contract
 base chain id: 8453
-call contract at 0xde151d5c92bfaa288db4b67c21cd55d5826bcc93 by providing:
-The function signature (methodSig),
-The ABI arguments (args),
-The EIP-1559 gas parameters,
-A chain ID for Base (8453),
-The same derivation path used for signing.
+call contract at 0xde151d5c92bfaa288db4b67c21cd55d5826bcc93
 
-dfx canister call wallet_canister eip1559Call '(
+**baseswap contract calls**
+dfx canister call wallet_canister callBaseProxyContract '(
   record {
-    to = "0xRecipient";
-    value = 1000000000000000000:nat;
-    data = blob "anyFunctionData";
+    chainId = 8453:nat;
     gasLimit = 300000:nat;
     maxFeePerGas = 2000000000:nat;
     maxPriorityFeePerGas = 1500000000:nat;
-    chainId = 8453:nat;
-    derivationPath = blob "somePath";
+    derivationPath = blob "derivationPath";
+    methodSig = "someMethod(uint256)";
+    args = vec { variant { uint256 = 1234:nat } };
   }
 )'
+
+**eip1559 calls**
+dfx canister call wallet_canister makeEthereumValueTrx '(
+  record {
+    canisterId = principal "<EVM_RPC_CANISTER_PID>";
+    rpcs = record {};
+    to = "0xRecipient";
+    value = 1000000000000000000:nat; // e.g. 1 ETH
+    gasPrice = 2000000000:nat;
+    gasLimit = 300000:nat;
+    maxPriorityFeePerGas = 1500000000:nat;
+    network = variant { Base = null };
+    tecdsaSha = blob "yourDerivationPath";
+    publicKey = blob "somePublicKey";
+  }
+)'
+
+**bridge base to ICRC**
+dfx canister call wallet_canister setEnv '(variant { Testnet })'
+dfx canister call wallet_canister bridgeBaseToIcrc '(
+  principal "<TOKEN_PID>",
+  opt null,
+  "0xYourBaseAddress",
+  "icpRecipientAddress",
+  1000000:nat
+)'
+
+**nfts:**
+-mintnft: calls "mint_icrc99(uint256,address,string)" on an NFT contract.
+-sendErc20: calls "transfer(address,uint256)" on an ERC-20 contract
+
 
 
 
