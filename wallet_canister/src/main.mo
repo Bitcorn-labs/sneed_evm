@@ -3,7 +3,6 @@ import Principal "mo:base/Principal";
 import Prim "mo:prim";
 import Hash "mo:base/Hash";
 
-// Mops dependencies (adjust paths if your Mops setup differs)
 import Vector "mo:vector/Vector";
 import Candy "mo:candy/Candy";
 import Map "mo:map/Map";
@@ -22,14 +21,10 @@ import EVMTxs "mo:evm-txs/EvmTxs";
 import ClassPlus "mo:class-plus/ClassPlus";
 import TimerTool "mo:timer-tool/TimerTool";
 
-// For encoding
 import ABI "mo:encoding.mo/abi";
 import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
 
-///////////////////////////////////
-// 1) EVM RPC
-///////////////////////////////////
 module EVMRPC {
   public type RpcServices = {};
   public type EthSendRawTransactionResult = variant {
@@ -56,9 +51,6 @@ module EVMRPC {
     };
 }
 
-///////////////////////////////////
-// 2) Errors + Result
-///////////////////////////////////
 public type TxError = variant {
   NotOwner;
   InvalidSignature;
@@ -76,9 +68,6 @@ public module Result {
   };
 }
 
-///////////////////////////////////
-// 3) Env + Network + NFT
-///////////////////////////////////
 public type DeploymentEnv = { #Mainnet; #Testnet };
 
 public type Network = variant {
@@ -92,9 +81,6 @@ public type RemoteNFTPointer = {
   network : Network;
 };
 
-///////////////////////////////////
-// 4) Hub bridging snippet
-///////////////////////////////////
 module Hub {
   public type BridgeArgs = record {
     token : principal;
@@ -112,18 +98,12 @@ module Hub {
   };
 }
 
-///////////////////////////////////
-// 5) Stable Vars
-///////////////////////////////////
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "Key_1";
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai";
 stable var env : DeploymentEnv = #Testnet;
 
-///////////////////////////////////
-// 6) getHubPrincipal + actor
-///////////////////////////////////
 private func getHubPrincipal(e : DeploymentEnv) : Principal {
   switch (e) {
     case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };
