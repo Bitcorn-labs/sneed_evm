@@ -44,13 +44,20 @@ target_chain_id:
 - Testnet: base_sepolia
 
 # Bridge ICRC tokens
-dfx canister call hub_client_canister bridgeICRCToken '(
-  principal "<ICRC_TOKEN_PID>",
-  null,
-  "0x<YourWalletCanisterEvmAddr>",
-  null,
-  1000000:nat
+**bridge base to ICRC**
+dfx canister call wallet_canister burnBaseToken '(
+  8453:nat,                    // chainId for Base
+  blob "yourDerivationPath",
+  2000000000:nat,             // maxFeePerGas
+  1500000000:nat,             // maxPriorityFeePerGas
+  300000:nat,                 // gasLimit
+  1000000:nat,                // amount to burn
+  "icp"                        // target chain
 )'
+
+signs an eip1559call 
+burn(1000000, "icp")
+
 
 # Send an irc1 token
 dfx canister call hub_client_canister send_icrc1_tokens '(
@@ -114,17 +121,6 @@ dfx canister call wallet_canister makeEthereumValueTrx '(
     tecdsaSha = blob "yourDerivationPath";
     publicKey = blob "somePublicKey";
   }
-)'
-
-**bridge base to ICRC**
-dfx canister call wallet_canister burnBaseToken '(
-  8453:nat,                    // chainId for Base
-  blob "yourDerivationPath",
-  2000000000:nat,             // maxFeePerGas
-  1500000000:nat,             // maxPriorityFeePerGas
-  300000:nat,                 // gasLimit
-  1000000:nat,                // amount to burn
-  "icp"                        // target chain
 )'
 
 
