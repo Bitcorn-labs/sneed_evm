@@ -6,14 +6,10 @@ import Cycles "mo:base/ExperimentalCycles";
 import Blob "mo:base/Blob";
 import Hash "mo:base/Hash";
 
-import Vector "mo:vector/Vector";
-import Candy "mo:candy/Candy";
-import Map "mo:map/Map";
-import Serde "mo:serde/Serde";
-import SHA3 "mo:sha3/SHA3";
-import SHA2 "mo:sha2/SHA2";
-import TEcdsa "mo:tecdsa/TEcdsa";
+// Data structure for concurrency-safe nonce management
 import StableBTreemap "mo:stableheapbtreemap/StableBTreemap";
+
+// Additional or optional imports
 import ICRC7 "mo:icrc7-mo/ICRC7";
 import ICRC3 "mo:icrc3-mo/ICRC3";
 import ICRC37 "mo:icrc37-mo/ICRC37";
@@ -24,14 +20,18 @@ import EVMTxs "mo:evm-txs/EvmTxs";
 import ClassPlus "mo:class-plus/ClassPlus";
 import TimerTool "mo:timer-tool/TimerTool";
 
-// For EVM encoding
+// EVM encoding
 import ABI "mo:encoding.mo/abi";
 import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
 import Buffer "mo:buffer/Buffer";
 
+////////////////////////////////////////////////////
+// EVM RPC Module
+////////////////////////////////////////////////////
 module EVMRPC {
   public type RpcServices = {};
+
   public type EthSendRawTransactionResult = variant {
     Ok : opt text;
     NonceTooLow;
@@ -39,11 +39,12 @@ module EVMRPC {
     InsufficientFunds;
     Other : text;
   };
+
   public type Service = actor {
     eth_sendRawTransaction : (
       RpcServices,
       ?{
-        responseSizeEstimate : ?nat64; 
+        responseSizeEstimate : ?nat64;
         responseConsensus : ?variant { Equality; SuperMajority; Absolute };
       },
       text
@@ -56,6 +57,9 @@ module EVMRPC {
     };
 }
 
+////////////////////////////////////////////////////
+// Errors / Results
+////////////////////////////////////////////////////
 public type TxError = variant {
   NotOwner;
   InvalidSignature;
@@ -67,19 +71,22 @@ public type TxError = variant {
 };
 
 public module Result {
-  public type Result<OkType, ErrType> = variant { 
-    ok : OkType; 
+  public type Result<OkType, ErrType> = variant {
+    ok : OkType;
     err : ErrType;
   };
 }
 
+////////////////////////////////////////////////////
+// Environment & Network
+////////////////////////////////////////////////////
 public type DeploymentEnv = {
   #Mainnet;
   #Testnet;
 };
 
 public type Network = variant {
-  Ethereum : opt Nat; 
+  Ethereum : opt Nat;
   Base : opt Nat;
 };
 
@@ -89,7 +96,7 @@ public type RemoteNFTPointer = {
   network : Network;
 };
 
-// 4) Hub bridging snippet
+// Example bridging snippet
 module Hub {
   public type BridgeArgs = record {
     token : principal;
@@ -107,15 +114,23 @@ module Hub {
   };
 }
 
-// 5) STABLE VARS
+////////////////////////////////////////////////////
+// Stable Vars
+////////////////////////////////////////////////////
+// Owner principal
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
-stable var nonceMap : [(blob, Nat)] = [];
-stable var ecdsaKeyName : Text = "dfx_test_key";    // ECDSA key name
-stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
-stable var env : DeploymentEnv = #Testnet; 
+// BTreeMap for (derivationPath -> nextNonce)
+stable let nonceMap = StableBTreemap.init<Blob, Nat>(1, Blob.compare);
+// ECDSA key name
+stable var ecdsaKeyName : Text = "dfx_test_key";
+// EVM RPC canister ID
+stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai";
+// Env setting
+stable var env : DeploymentEnv = #Testnet;
 
-
+////////////////////////////////////////////////////
 // Management canister for ECDSA
+////////////////////////////////////////////////////
 type ICManagement = actor {
   ecdsa_public_key : ({
     canister_id : ?Principal;
@@ -130,28 +145,71 @@ type ICManagement = actor {
   }) -> async ({ signature : Blob });
 };
 
-private func getHubPrincipal(e : DeploymentEnv) : Principal {
-  switch e {
-    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };
-    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };
-  }
-}
+////////////////////////////////////////////////////
+// Private Helpers
+////////////////////////////////////////////////////
+private func is_owner(p : Principal) : Bool {
+  // If you do NOT want the controller to have ownership rights, remove this line:
+  if (Principal.isController(p)) { 
+    return true; 
+  };
+  p == owner
+};
 
+/// getNextNonce : reads/increments stable BTreeMap for concurrency safety
+private func getNextNonce(path : Blob) : Nat {
+  let existing = nonceMap.get(path);
+  switch (existing) {
+    case null {
+      nonceMap.put(path, 1);
+      0
+    };
+    case (?current) {
+      let next = current + 1;
+      nonceMap.put(path, next);
+      current
+    };
+  }
+};
+
+/// sendToEvmRpc : sends a raw hex transaction to EVM RPC
+private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, TxError> {
+  let evmActor = actor(evmRpcCanisterId) : EVMRPC.Service;
+  let result = await evmActor.eth_sendRawTransaction({}, null, "0x" # rawTx);
+
+  switch (result) {
+    case (#Consistent(#Ok(#Ok(?txHash)))) { #ok(txHash) };
+    case (#Consistent(#Ok(#Ok(null))))     { #ok("0x") };
+    case (#Consistent(#Ok(#NonceTooLow)))  { #err(#NonceTooLow) };
+    case (#Consistent(#Ok(#NonceTooHigh))) { #err(#NonceTooHigh) };
+    case (#Consistent(#Ok(#InsufficientFunds))) { #err(#InsufficientFunds) };
+    case (#Consistent(#Ok(#Other(err))))   { #err(#RpcError(err)) };
+    case (#Consistent(#Err(err)))          { #err(#RpcError(err)) };
+    case (#Inconsistent(err))              { #err(#RpcError(err)) };
+  }
+};
+
+////////////////////////////////////////////////////
+// Actor Definition
+////////////////////////////////////////////////////
 actor {
 
-  private func is_owner(p : Principal) : Bool {
-    if (Principal.isController(p)) { return true; }
-    if (p == owner) { return true; }
-    false
-  };
-
+  //---------------------------------------------
+  // Admin & Env Functions
+  //---------------------------------------------
   public shared({caller}) func setOwner(newOwner : Principal) : async () {
-    if (!is_owner(caller)) { return; }
+    if (!is_owner(caller)) {
+      Debug.print("Unauthorized attempt to set owner.");
+      return;
+    };
     owner := newOwner;
   };
 
   public shared({caller}) func setEnv(newEnv : DeploymentEnv) : async () {
-    if (!is_owner(caller)) { return; }
+    if (!is_owner(caller)) {
+      Debug.print("Unauthorized attempt to set environment.");
+      return;
+    };
     env := newEnv;
   };
 
@@ -163,14 +221,16 @@ actor {
     owner
   }
 
-  // ECDSA calls
+  //---------------------------------------------
+  // ECDSA PubKey & Signing
+  //---------------------------------------------
   private func signWithEcdsa(
     msgHash : Blob,
     derivationPath : [Blob]
   ) : async Result.Result<Blob, TxError> {
     try {
       let mgmt : ICManagement = actor("aaaaa-aa");
-      // optionally add cycles e.g. Cycles.add(25_000_000_000);
+      // If needed, add cycles: Cycles.add(25_000_000_000);
 
       let { signature } = await mgmt.sign_with_ecdsa({
         message_hash = msgHash;
@@ -179,12 +239,14 @@ actor {
       });
       #ok(signature);
     } catch (err) {
-      Debug.print(Error.message(err));
+      Debug.print("signWithEcdsa error: " # Error.message(err));
       #err(#GenericError(Error.message(err)));
     }
   }
 
-  private func getEcdsaPublicKey(derivationPath : [Blob]) : async Result.Result<Blob, TxError> {
+  private func getEcdsaPublicKey(
+    derivationPath : [Blob]
+  ) : async Result.Result<Blob, TxError> {
     try {
       let mgmt : ICManagement = actor("aaaaa-aa");
       let { public_key } = await mgmt.ecdsa_public_key({
@@ -194,11 +256,12 @@ actor {
       });
       #ok(public_key);
     } catch (err) {
-      Debug.print(Error.message(err));
+      Debug.print("getEcdsaPublicKey error: " # Error.message(err));
       #err(#GenericError(Error.message(err)));
     }
   }
 
+  /// getEvmAddress : Derive EVM address from secp256k1 pubkey
   public shared(query) func getEvmAddress() : async Text {
     let pkResult = await getEcdsaPublicKey([]);
     switch (pkResult) {
@@ -209,48 +272,21 @@ actor {
         if (pubKey.size() < 65) {
           "ERROR: unexpected pubKey size"
         } else {
-          let raw = pubKey[1:65];
+          let raw = pubKey[1:65];  // skip 0x04
           let hash = Hash.keccak256(raw);
           let addrBytes = hash[(hash.size() - 20) : hash.size()];
           "0x" # Hex.encode(addrBytes)
         }
       }
     }
-  };
-
-  // Nonce Management
-  private func getNextNonce(path : Blob) : Nat {
-    let idx = List.findIndex<Nat>(nonceMap, func((k, _v)) { k == path });
-    if (idx == null) {
-      nonceMap := nonceMap # [(path, 0)];
-      0
-    } else {
-      let current = nonceMap[idx!].1;
-      nonceMap[idx!] := (path, current + 1);
-      current
-    }
   }
 
-  // sendToEvmRpc
-  private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, TxError> {
-    let evmActor = actor(evmRpcCanisterId) : EVMRPC.Service;
-    let result = await evmActor.eth_sendRawTransaction({}, null, "0x" # rawTx);
-    switch (result) {
-      case (#Consistent(#Ok(#Ok(?txHash)))) { #ok(txHash) };
-      case (#Consistent(#Ok(#Ok(null)))) { #ok("0x") };
-      case (#Consistent(#Ok(#NonceTooLow))) { #err(#NonceTooLow) };
-      case (#Consistent(#Ok(#NonceTooHigh))) { #err(#NonceTooHigh) };
-      case (#Consistent(#Ok(#InsufficientFunds))) { #err(#InsufficientFunds) };
-      case (#Consistent(#Ok(#Other(err)))) { #err(#RpcError(err)) };
-      case (#Consistent(#Err(err))) { #err(#RpcError(err)) };
-      case (#Inconsistent(err)) { #err(#RpcError(err)) };
-    }
-  }
-
-  // E) EIP-1559 structure
+  //---------------------------------------------
+  // EIP-1559 Generic Calls
+  //---------------------------------------------
   public type Eip1559Params = {
-    to : Text; 
-    value : Nat; 
+    to : Text;
+    value : Nat;
     data : [Nat8];
     gasLimit : Nat;
     maxFeePerGas : Nat;
@@ -259,12 +295,14 @@ actor {
     derivationPath : Blob;
   };
 
-  // eip1559Call = generic to call evm contracts
-  public shared({caller}) func eip1559Call(p : Eip1559Params) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
-    let nonce = getNextNonce(p.derivationPath);
+  /// eip1559Call : generic EIP-1559 sign & send
+  public shared({caller}) func eip1559Call(
+    p : Eip1559Params
+  ) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
 
-    let #ok(msgToSign) = EVM.Transaction1559.getMessageToSign({
+    let nonce = getNextNonce(p.derivationPath);
+    let prepRes = EVM.Transaction1559.getMessageToSign({
       chainId = Nat64.fromNat(p.chainId);
       nonce = Nat64.fromNat(nonce);
       maxPriorityFeePerGas = Nat64.fromNat(p.maxPriorityFeePerGas);
@@ -277,40 +315,54 @@ actor {
       r = "0x00";
       s = "0x00";
       v = "0x00";
-    }) else {
-      return #err(#GenericError("Transaction1559.getMessageToSign failed"));
-    };
+    });
 
-    let signResult = await signWithEcdsa(Blob.fromArray(msgToSign), [p.derivationPath]);
-    switch (signResult) {
-      case (#err(e)) { #err(e) };
-      case (#ok(signature)) {
-        if (signature.size() != 64) {
-          #err(#InvalidSignature)
-        } else {
-          let #ok(finalTx) = EVM.Transaction1559.signAndSerialize({
-            chainId = Nat64.fromNat(p.chainId);
-            nonce = Nat64.fromNat(nonce);
-            maxPriorityFeePerGas = Nat64.fromNat(p.maxPriorityFeePerGas);
-            gasLimit = Nat64.fromNat(p.gasLimit);
-            maxFeePerGas = Nat64.fromNat(p.maxFeePerGas);
-            to = p.to;
-            value = p.value;
-            data = "0x" # Hex.encode(p.data);
-            accessList = [];
-            r = "0x00";
-            s = "0x00";
-            v = "0x00";
-          }, Blob.toArray(signature), [0x04], null) else {
-            return #err(#GenericError("Transaction1559.signAndSerialize failed"));
-          };
-          let rawTx = Hex.encode(finalTx.1);
-          await sendToEvmRpc(rawTx);
+    switch (prepRes) {
+      case (#err(eMsg)) {
+        #err(#GenericError("Transaction1559.getMessageToSign failed: " # eMsg));
+      };
+      case (#ok(msgToSign)) {
+        let signRes = await signWithEcdsa(Blob.fromArray(msgToSign), [p.derivationPath]);
+        switch (signRes) {
+          case (#err(e)) { #err(e) };
+          case (#ok(sig)) {
+            if (sig.size() != 64) {
+              #err(#InvalidSignature)
+            } else {
+              let finalTxRes = EVM.Transaction1559.signAndSerialize({
+                chainId = Nat64.fromNat(p.chainId);
+                nonce = Nat64.fromNat(nonce);
+                maxPriorityFeePerGas = Nat64.fromNat(p.maxPriorityFeePerGas);
+                gasLimit = Nat64.fromNat(p.gasLimit);
+                maxFeePerGas = Nat64.fromNat(p.maxFeePerGas);
+                to = p.to;
+                value = p.value;
+                data = "0x" # Hex.encode(p.data);
+                accessList = [];
+                r = "0x00";
+                s = "0x00";
+                v = "0x00";
+              }, Blob.toArray(sig), [0x04], null);
+
+              switch (finalTxRes) {
+                case (#err(serErr)) {
+                  #err(#GenericError("Transaction1559.signAndSerialize failed: " # serErr));
+                };
+                case (#ok(finalTx)) {
+                  let rawTx = Hex.encode(finalTx.1);
+                  await sendToEvmRpc(rawTx);
+                }
+              }
+            }
+          }
         }
       }
     }
   }
 
+  //---------------------------------------------
+  // Mint NFT (Example)
+  //---------------------------------------------
   public type MintParams = {
     pointer : RemoteNFTPointer;
     to : Text;
@@ -321,20 +373,25 @@ actor {
     derivationPath : Blob;
   };
 
-  public shared({caller}) func mintNft(p : MintParams) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
+  public shared({caller}) func mintNft(
+    p : MintParams
+  ) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
+
     let chainId = switch (p.pointer.network) {
       case (#Ethereum(null)) { 1 };
       case (#Ethereum(?val)) { val };
       case (#Base(null)) { 8453 };
       case (#Base(?val)) { val };
     };
+
     let methodSig = "mint_icrc99(uint256,address,string)";
     let callData = ABI.encodeFunctionCall(methodSig, [
       ABI.Value.uint256(p.pointer.tokenId),
       ABI.Value.address(ABI.Address.fromText(p.to)),
       ABI.Value.string(p.uri)
     ]);
+
     let txParams : Eip1559Params = {
       to = p.pointer.contract;
       value = 0;
@@ -345,24 +402,32 @@ actor {
       chainId = chainId;
       derivationPath = p.derivationPath;
     };
+
     eip1559Call(txParams)
   }
 
-  // baseswap contract calls
+  //---------------------------------------------
+  // BaseSwap Contract Interactions
+  //---------------------------------------------
+  /// Generic function to call BaseSwap at "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93"
   public type BaseCallParams = {
-    chainId : Nat;            
-    gasLimit : Nat;           
-    maxFeePerGas : Nat;       
+    chainId : Nat;
+    gasLimit : Nat;
+    maxFeePerGas : Nat;
     maxPriorityFeePerGas : Nat;
-    derivationPath : Blob;    
-    methodSig : Text;         
+    derivationPath : Blob;
+    methodSig : Text;
     args : [ABI.Value];
   };
 
-  public shared({caller}) func callBaseProxyContract(p : BaseCallParams) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
+  public shared({caller}) func callBaseProxyContract(
+    p : BaseCallParams
+  ) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
+
     let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
     let callData = ABI.encodeFunctionCall(p.methodSig, p.args);
+
     let txParams : Eip1559Params = {
       to = contractAddr;
       value = 0;
@@ -373,29 +438,104 @@ actor {
       chainId = p.chainId;
       derivationPath = p.derivationPath;
     };
+
     eip1559Call(txParams)
   }
 
-  /// A record describing the parameters for increaseLiquidity:
-public type IncreaseLiquidityParams = {
-  chainId : Nat;
-  derivationPath : Blob;
-  gasLimit : Nat;
-  maxFeePerGas : Nat;
-  maxPriorityFeePerGas : Nat;
+  //---------------------------------------------
+  // Approve ERC20 for BaseSwap
+  //---------------------------------------------
+  /// This is how you might specifically call `approve(address,uint256)`
+  public shared({caller}) func baseSwapApprove(
+    chainId : Nat,
+    derivationPath : Blob,
+    tokenAddress : Text,
+    spender : Text,
+    amount : Nat,
+    maxFeePerGas : Nat,
+    maxPriorityFeePerGas : Nat,
+    gasLimit : Nat
+  ) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
 
-  // the function arguments
-  token0 : Text;          // e.g. "0xToken0"
-  token1 : Text;          // e.g. "0xToken1"
-  amount0Desired : Nat;
-  amount1Desired : Nat;
-  amount0Min : Nat;
-  amount1Min : Nat;
-  recipient : Text;       // e.g. "0xRecipient"
-  deadline : Nat;
-};
+    let methodSig = "approve(address,uint256)";
+    let callData = ABI.encodeFunctionCall(methodSig, [
+      ABI.Value.address(ABI.Address.fromText(spender)),
+      ABI.Value.uint256(amount)
+    ]);
 
-//send erc20 token
+    let txParams : Eip1559Params = {
+      to = tokenAddress;
+      value = 0;
+      data = callData;
+      gasLimit = gasLimit;
+      maxFeePerGas = maxFeePerGas;
+      maxPriorityFeePerGas = maxPriorityFeePerGas;
+      chainId = chainId;
+      derivationPath = derivationPath;
+    };
+
+    eip1559Call(txParams)
+  }
+
+  //---------------------------------------------
+  // Increase Liquidity for BaseSwap
+  //---------------------------------------------
+  public type IncreaseLiquidityParams = {
+    chainId : Nat;
+    derivationPath : Blob;
+    gasLimit : Nat;
+    maxFeePerGas : Nat;
+    maxPriorityFeePerGas : Nat;
+    // The typical arguments for BaseSwap's "increaseLiquidity"
+    tokenId : Nat;
+    amount0Desired : Nat;
+    amount1Desired : Nat;
+    amount0Min : Nat;
+    amount1Min : Nat;
+    recipient : Text;
+    deadline : Nat;
+  };
+
+  /// A sample specialized function to call `increaseLiquidity(...)` on BaseSwap
+  public shared({caller}) func increaseLiquidityBaseSwap(
+    p : IncreaseLiquidityParams
+  ) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
+
+    // Typically: increaseLiquidity(uint256 tokenId, uint256 amount0Desired, 
+    // uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, 
+    // address recipient, uint256 deadline)
+
+    let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
+    let methodSig = "increaseLiquidity(uint256,uint256,uint256,uint256,uint256,address,uint256)";
+    let callData = ABI.encodeFunctionCall(methodSig, [
+      ABI.Value.uint256(p.tokenId),
+      ABI.Value.uint256(p.amount0Desired),
+      ABI.Value.uint256(p.amount1Desired),
+      ABI.Value.uint256(p.amount0Min),
+      ABI.Value.uint256(p.amount1Min),
+      ABI.Value.address(ABI.Address.fromText(p.recipient)),
+      ABI.Value.uint256(p.deadline)
+    ]);
+
+    let txParams : Eip1559Params = {
+      to = contractAddr;
+      value = 0;
+      data = callData;
+      gasLimit = p.gasLimit;
+      maxFeePerGas = p.maxFeePerGas;
+      maxPriorityFeePerGas = p.maxPriorityFeePerGas;
+      chainId = p.chainId;
+      derivationPath = p.derivationPath;
+    };
+
+    eip1559Call(txParams)
+  }
+
+  //---------------------------------------------
+  // SEND ERC20
+  //---------------------------------------------
   public type Erc20Params = {
     tokenAddress : Text;
     to : Text;
@@ -410,12 +550,14 @@ public type IncreaseLiquidityParams = {
   public shared({caller}) func sendErc20(
     p : Erc20Params
   ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
-    let sig = "transfer(address,uint256)";
-    let callData = ABI.encodeFunctionCall(sig, [
+    if (!is_owner(caller)) { return #err(#NotOwner); };
+
+    let methodSig = "transfer(address,uint256)";
+    let callData = ABI.encodeFunctionCall(methodSig, [
       ABI.Value.address(ABI.Address.fromText(p.to)),
       ABI.Value.uint256(p.amount)
     ]);
+
     let txParams : Eip1559Params = {
       to = p.tokenAddress;
       value = 0;
@@ -426,110 +568,47 @@ public type IncreaseLiquidityParams = {
       chainId = p.chainId;
       derivationPath = p.derivationPath;
     };
+
     eip1559Call(txParams)
   }
 
+  //---------------------------------------------
+  // MAKE ETH VALUE TRANSACTION (EIP-1559)
+  //---------------------------------------------
   public shared({caller}) func makeEthereumValueTrx(request : {
-  canisterId : Principal;
-  rpcs : EVMRPC.RpcServices;
-  to : Text;
-  value : Nat;
-  gasPrice : Nat;
-  gasLimit : Nat;
-  maxPriorityFeePerGas : Nat;
-  network : Network;
-  tecdsaSha : Blob;
-  publicKey : [Nat8];
-}) : async Result.Result<Text, TxError> {
-  if (!is_owner(caller)) { 
-    return #err(#NotOwner); 
-  };
+    canisterId : Principal;
+    rpcs : EVMRPC.RpcServices;
+    to : Text;
+    value : Nat;
+    gasPrice : Nat;
+    gasLimit : Nat;
+    maxPriorityFeePerGas : Nat;
+    network : Network;
+    tecdsaSha : Blob;
+    publicKey : [Nat8];
+  }) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
 
-  // 1) Determine chainId from `request.network`
-  let chainId = switch (request.network) {
-    case (#Ethereum(val)) {
-      switch (val) {
-        case null { 1 };         // default to Ethereum mainnet
-        case (?cid) { cid };     // or user-specified chain ID
-      }
+    let chainId = switch (request.network) {
+      case (#Ethereum(val)) {
+        switch (val) {
+          case null { 1 };      // default Ethereum mainnet
+          case (?cid) { cid };
+        }
+      };
+      case (#Base(val)) {
+        switch (val) {
+          case null { 8453 };   // default Base mainnet
+          case (?cid) { cid };
+        }
+      };
     };
-    case (#Base(val)) {
-      switch (val) {
-        case null { 8453 };      // default to Base mainnet
-        case (?cid) { cid };
-      }
-    };
-  };
 
-  // 2) Build the EIP-1559 parameters
-  let txParams : Eip1559Params = {
-    to = request.to;
-    value = request.value;
-    // no extra data => purely sending ETH => "0x"
-    data = "0x";
-    gasLimit = request.gasLimit;
-    maxFeePerGas = request.gasPrice;           // `gasPrice` is your maxFeePerGas
-    maxPriorityFeePerGas = request.maxPriorityFeePerGas;
-    chainId = chainId;
-    derivationPath = request.tecdsaSha;
-  };
-
-  // 3) Reuse your eip1559Call(...) => signs + broadcasts the EIP-1559 transaction
-  return await eip1559Call(txParams);
-}
-
-  public shared({caller}) func makeEthereumTrx(request : {
-  canisterId : Principal;
-  rpcs : EVMRPC.RpcServices;
-  method : Text;       // e.g. "transfer(address,uint256)"
-  args : [Nat8];       // raw ABI data or partial
-  gasPrice : Nat;
-  gasLimit : Nat;
-  maxPriorityFeePerGas : Nat;
-  contract : Text;     // e.g. "0xERC20Contract"
-  network : Network;
-  tecdsaSha : Blob;    // derivation path
-  publicKey : [Nat8];
-}) : async Result.Result<Text, TxError> {
-  if (!is_owner(caller)) { 
-    return #err(#NotOwner); 
-  };
-
-  // 1) Determine chainId from `request.network`
-  let chainId = switch (request.network) {
-    case (#Ethereum(val)) {
-      switch (val) {
-        case null { 1 };
-        case (?cid) { cid };
-      }
-    };
-    case (#Base(val)) {
-      switch (val) {
-        case null { 8453 };
-        case (?cid) { cid };
-      }
-    };
-  };
-
-  // 2) If you want to automatically prepend the 4-byte method hash for `request.method`
-  //    we can do something like:
-  if (request.method.size() > 0) {
-    let sha3 = SHA3.Keccak(256);
-    sha3.update(Blob.toArray(Text.encodeUtf8(request.method)));
-    let methodHash = Array.take<Nat8>(sha3.finalize(), 4);
-
-    // combine methodHash + request.args
-    let combinedBuf = Buffer.Buffer<Nat8>(0);
-    combinedBuf.append(Buffer.fromArray<Nat8>(methodHash));
-    combinedBuf.append(Buffer.fromArray<Nat8>(request.args));
-
-    let finalData = Buffer.toArray<Nat8>(combinedBuf);
-
-    // 3) Build EIP-1559 params
+    // We'll use `gasPrice` as maxFeePerGas, as is typical in a transitional approach
     let txParams : Eip1559Params = {
-      to = request.contract;
-      value = 0;      // no value transfer
-      data = "0x" # Hex.encode(finalData);
+      to = request.to;
+      value = request.value;
+      data = "0x";
       gasLimit = request.gasLimit;
       maxFeePerGas = request.gasPrice;
       maxPriorityFeePerGas = request.maxPriorityFeePerGas;
@@ -537,14 +616,73 @@ public type IncreaseLiquidityParams = {
       derivationPath = request.tecdsaSha;
     };
 
-    return await eip1559Call(txParams);
-
-  } else {
-    return #err(#GenericError("No method provided"));
+    eip1559Call(txParams)
   }
-}
 
-  // bito bridge burn function (send base token, specict icp chain id)
+  //---------------------------------------------
+  // MAKE GENERAL ETH TRANSACTION (EIP-1559)
+  //---------------------------------------------
+  public shared({caller}) func makeEthereumTrx(request : {
+    canisterId : Principal;
+    rpcs : EVMRPC.RpcServices;
+    method : Text;       
+    args : [Nat8];       
+    gasPrice : Nat;
+    gasLimit : Nat;
+    maxPriorityFeePerGas : Nat;
+    contract : Text;     
+    network : Network;
+    tecdsaSha : Blob;    
+    publicKey : [Nat8];
+  }) : async Result.Result<Text, TxError> {
+    if (!is_owner(caller)) { return #err(#NotOwner); };
+
+    let chainId = switch (request.network) {
+      case (#Ethereum(val)) {
+        switch (val) {
+          case null { 1 };
+          case (?cid) { cid };
+        }
+      };
+      case (#Base(val)) {
+        switch (val) {
+          case null { 8453 };
+          case (?cid) { cid };
+        }
+      };
+    };
+
+    if (request.method.size() > 0) {
+      // Prepend 4-byte selector
+      let sha3 = SHA3.Keccak(256);
+      sha3.update(Blob.toArray(Text.encodeUtf8(request.method)));
+      let methodHash = Array.take<Nat8>(sha3.finalize(), 4);
+
+      let combinedBuf = Buffer.Buffer<Nat8>(0);
+      combinedBuf.append(Buffer.fromArray<Nat8>(methodHash));
+      combinedBuf.append(Buffer.fromArray<Nat8>(request.args));
+      let finalData = Buffer.toArray<Nat8>(combinedBuf);
+
+      let txParams : Eip1559Params = {
+        to = request.contract;
+        value = 0;
+        data = "0x" # Hex.encode(finalData);
+        gasLimit = request.gasLimit;
+        maxFeePerGas = request.gasPrice;
+        maxPriorityFeePerGas = request.maxPriorityFeePerGas;
+        chainId = chainId;
+        derivationPath = request.tecdsaSha;
+      };
+
+      return await eip1559Call(txParams);
+    } else {
+      return #err(#GenericError("No method provided"));
+    }
+  }
+
+  //---------------------------------------------
+  // BURN BASE TOKEN (Example bridging method)
+  //---------------------------------------------
   public shared({caller}) func burnBaseToken(
     chainId : Nat,
     derivationPath : Blob,
@@ -559,18 +697,18 @@ public type IncreaseLiquidityParams = {
     if (!is_owner(caller)) {
       return #err(#NotOwner);
     };
+
     let helper_contract = "0xDB4270fd1fa025A9403539fA8696092A6451E7FC";
     let methodSig = "burn(bytes,address,uint256,bytes)";
     let chainAddress = formatICPAddressFuc(icpAddress);
-    let callData = ABI.encodeFunctionCall(
-      methodSig,
-      [
-        ABI.Value.bytes(toChainBytes),
-        ABI.Value.address(ABI.Address.fromText(tokenAddress)),
-        ABI.Value.uint256(withdrawAmount),
-        ABI.Value.bytes(chainAddress)
-      ]
-    );
+
+    let callData = ABI.encodeFunctionCall(methodSig, [
+      ABI.Value.bytes(toChainBytes),
+      ABI.Value.address(ABI.Address.fromText(tokenAddress)),
+      ABI.Value.uint256(withdrawAmount),
+      ABI.Value.bytes(chainAddress)
+    ]);
+
     let txParams : Eip1559Params = {
       to = helper_contract;
       value = 0;
@@ -581,17 +719,20 @@ public type IncreaseLiquidityParams = {
       chainId = chainId;
       derivationPath = derivationPath;
     };
+
     eip1559Call(txParams)
   }
 
-  // Format ICP principal => [length, principalBytes...]
+  // Utility for formatting an ICP principal as [len, principalBytes...]
   private func formatICPAddressFuc(address : Text) : [Nat8] {
     let p = Principal.fromText(address);
     let arr = Principal.toBlob(p);
     let length = Blob.size(arr);
+
     var newArr = Array.init<Nat8>(length + 1, 0);
     newArr[0] := Nat8.fromNat(length);
     Array.copy<Nat8>(newArr, 1, arr, 0, length);
+
     newArr
   }
 }
