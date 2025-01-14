@@ -6,7 +6,6 @@ import Cycles "mo:base/ExperimentalCycles";
 import Blob "mo:base/Blob";
 import Hash "mo:base/Hash";
 
-// Mops dependencies (adjust paths if your setup differs)
 import Vector "mo:vector/Vector";
 import Candy "mo:candy/Candy";
 import Map "mo:map/Map";
@@ -31,9 +30,6 @@ import EVM "mo:encoding.mo/EVM";
 import Hex "mo:encoding.mo/hex";
 import Buffer "mo:buffer/Buffer";
 
-////////////////////////////////////
-// 1) EVM RPC definitions
-////////////////////////////////////
 module EVMRPC {
   public type RpcServices = {};
   public type EthSendRawTransactionResult = variant {
@@ -60,9 +56,6 @@ module EVMRPC {
     };
 }
 
-////////////////////////////////////
-// 2) Errors + Result
-////////////////////////////////////
 public type TxError = variant {
   NotOwner;
   InvalidSignature;
@@ -80,9 +73,6 @@ public module Result {
   };
 }
 
-////////////////////////////////////
-// 3) Deployment Env + Networks
-////////////////////////////////////
 public type DeploymentEnv = {
   #Mainnet;
   #Testnet;
@@ -99,9 +89,7 @@ public type RemoteNFTPointer = {
   network : Network;
 };
 
-////////////////////////////////////
 // 4) Hub bridging snippet
-////////////////////////////////////
 module Hub {
   public type BridgeArgs = record {
     token : principal;
@@ -119,18 +107,15 @@ module Hub {
   };
 }
 
-////////////////////////////////////
 // 5) STABLE VARS
-////////////////////////////////////
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "dfx_test_key";    // ECDSA key name
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
 stable var env : DeploymentEnv = #Testnet; 
 
-////////////////////////////////////
-// 6) Management canister for ECDSA
-////////////////////////////////////
+
+// Management canister for ECDSA
 type ICManagement = actor {
   ecdsa_public_key : ({
     canister_id : ?Principal;
@@ -145,9 +130,6 @@ type ICManagement = actor {
   }) -> async ({ signature : Blob });
 };
 
-////////////////////////////////////
-// 7) getHubPrincipal
-////////////////////////////////////
 private func getHubPrincipal(e : DeploymentEnv) : Principal {
   switch e {
     case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };
@@ -155,14 +137,8 @@ private func getHubPrincipal(e : DeploymentEnv) : Principal {
   }
 }
 
-////////////////////////////////////
-// 8) The actor
-////////////////////////////////////
 actor {
 
-  ////////////////////////////////////
-  // A) Ownership checks
-  ////////////////////////////////////
   private func is_owner(p : Principal) : Bool {
     if (Principal.isController(p)) { return true; }
     if (p == owner) { return true; }
@@ -187,9 +163,7 @@ actor {
     owner
   }
 
-  ////////////////////////////////////
-  // B) ECDSA calls
-  ////////////////////////////////////
+  // ECDSA calls
   private func signWithEcdsa(
     msgHash : Blob,
     derivationPath : [Blob]
@@ -244,9 +218,7 @@ actor {
     }
   };
 
-  ////////////////////////////////////
-  // C) Nonce Management
-  ////////////////////////////////////
+  // Nonce Management
   private func getNextNonce(path : Blob) : Nat {
     let idx = List.findIndex<Nat>(nonceMap, func((k, _v)) { k == path });
     if (idx == null) {
@@ -259,9 +231,7 @@ actor {
     }
   }
 
-  ////////////////////////////////////
-  // D) sendToEvmRpc
-  ////////////////////////////////////
+  // sendToEvmRpc
   private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, TxError> {
     let evmActor = actor(evmRpcCanisterId) : EVMRPC.Service;
     let result = await evmActor.eth_sendRawTransaction({}, null, "0x" # rawTx);
@@ -277,9 +247,7 @@ actor {
     }
   }
 
-  ////////////////////////////////////
   // E) EIP-1559 structure
-  ////////////////////////////////////
   public type Eip1559Params = {
     to : Text; 
     value : Nat; 
@@ -291,9 +259,7 @@ actor {
     derivationPath : Blob;
   };
 
-  ////////////////////////////////////
-  // F) eip1559Call => improved ECDSA usage
-  ////////////////////////////////////
+  // F) eip1559Call => improved ECDSA usage/
   public shared({caller}) func eip1559Call(p : Eip1559Params) : async Result.Result<Text, TxError> {
     if (!is_owner(caller)) { return #err(#NotOwner) };
     let nonce = getNextNonce(p.derivationPath);
@@ -345,9 +311,6 @@ actor {
     }
   }
 
-  ////////////////////////////////////
-  // G) Example: mintNft => uses eip1559Call
-  ////////////////////////////////////
   public type MintParams = {
     pointer : RemoteNFTPointer;
     to : Text;
@@ -413,9 +376,7 @@ actor {
     await hubActor().bridge(bridgeArgs)
   }
 
-  ////////////////////////////////////
-  // I) A function to call a base contract with eip1559Call
-  ////////////////////////////////////
+  // A function to call a baseswap comtract
   public type BaseCallParams = {
     chainId : Nat;            
     gasLimit : Nat;           
@@ -442,12 +403,6 @@ actor {
     };
     eip1559Call(txParams)
   }
-
-  ////////////////////////////////////
-  // J) Additional specialized methods 
-  ////////////////////////////////////
-  // like sendErc20, makeEthereumTrx, etc. 
-  // We'll define them below:
 
   public type Erc20Params = {
     tokenAddress : Text;
@@ -517,7 +472,7 @@ actor {
     #err(#GenericError("Implementation omitted for brevity; adapt from eip1559Call."))
   }
 
-  // K) If you have a "burnBaseToken(...)" for a 4-arg burn(...) signature, do similarly:
+  // bito bridge burn function (send base token, specict icp chain id)
   public shared({caller}) func burnBaseToken(
     chainId : Nat,
     derivationPath : Blob,
@@ -557,7 +512,7 @@ actor {
     eip1559Call(txParams)
   }
 
-  // L) Format ICP principal => [length, principalBytes...]
+  // Format ICP principal => [length, principalBytes...]
   private func formatICPAddressFuc(address : Text) : [Nat8] {
     let p = Principal.fromText(address);
     let arr = Principal.toBlob(p);
