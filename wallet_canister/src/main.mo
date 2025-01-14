@@ -348,34 +348,7 @@ actor {
     eip1559Call(txParams)
   }
 
-  ////////////////////////////////////
-  // H) Additional calls: bridging, etc.
-  ////////////////////////////////////
-  private func hubActor() : Hub.HubService {
-    actor(getHubPrincipal(env)) : Hub.HubService
-  }
-
-  public shared({caller}) func bridgeBaseToIcrc(
-    tokenPid : principal,
-    fromTxId : ?Text,
-    fromAddress : Text,
-    recipientIcrc : Text,
-    amount : Nat
-  ) : async Hub.Result_1 {
-    if (!is_owner(caller)) {
-      return #Err(#PermissionDenied);
-    };
-    let bridgeArgs : Hub.BridgeArgs = {
-      token = tokenPid;
-      from_tx_id = fromTxId;
-      recipient = recipientIcrc;
-      target_chain_id = "icp";
-      from_address = ?fromAddress;
-      amount = amount;
-    };
-    await hubActor().bridge(bridgeArgs)
-  }
-
+  // Additional calls
   // A function to call a baseswap comtract
   public type BaseCallParams = {
     chainId : Nat;            
@@ -404,6 +377,7 @@ actor {
     eip1559Call(txParams)
   }
 
+//send erc20
   public type Erc20Params = {
     tokenAddress : Text;
     to : Text;
