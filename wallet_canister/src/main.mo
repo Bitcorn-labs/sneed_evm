@@ -125,7 +125,7 @@ module Hub {
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 stable var nonceMap : [(blob, Nat)] = [];
 stable var ecdsaKeyName : Text = "dfx_test_key";    // ECDSA key name
-stable var evmRpcCanisterId : Principal = principal "aaaaa-aa"; 
+stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai"; 
 stable var env : DeploymentEnv = #Testnet; 
 
 ////////////////////////////////////
