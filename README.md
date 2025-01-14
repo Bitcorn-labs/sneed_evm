@@ -1,50 +1,76 @@
-# sneed_evm
-# multi canister approach to bridging icrcs to evm with a handler canister
-sneed evm interface and handler.
-thank your bitomni 
-thank your icdevs
-thank your sneeds
+# Sneed EVM
+## Multi-Canister Approach to Bridging ICRCs to EVM with a Handler Canister
+
+Sneed EVM interface and handler.
+
+### Acknowledgements
+- Thank you, Bitomni.
+- Thank you, ICDevs.
+- Thank you, Sneed DAO.
+- Thank you, Bitcorn Labs.
+
+---
+
+## Project Overview
+
 This project includes:
 
-1. **hub_client_canister**  
-   - Calls an existing Bridge canister via `hub.did` to move ICRC tokens from the IC to base.
+### 1. **Hub Client Canister**
+   - Calls an existing bridge canister via `hub.did` to move ICRC tokens from the IC to Base.
 
-2. **wallet_canister**  
+### 2. **Wallet Canister**
    - Owns an EVM address (via the IC’s ECDSA).
-   - Uses the [aviate-labs/encoding.mo](https://github.com/aviate-labs/encoding.mo) library for EVM transaction building and ABI encoding.
+   - Uses the [Aviate Labs Encoding.mo](https://github.com/aviate-labs/encoding.mo) library for EVM transaction building and ABI encoding.
    - Can send/receive ERC-20 tokens, mint NFTs, and check balances.
+
+---
 
 ## Quick Start
 
-1. **Install** dfx:
-   ```bash
-   dfx start --clean --background
+### 1. **Install DFX**
+```bash
+dfx start --clean --background
+```
 
-2. **deps evm rpc**
-    Start the local replica
+### 2. **EVM RPC Deployment**
+
+Start the local replica:
+```bash
 dfx start --background
+```
 
-Locally deploy the `evm_rpc` canister
+Locally deploy the `evm_rpc` canister:
+```bash
 dfx deps pull
 dfx deps init evm_rpc --argument '(record {})'
 dfx deps deploy
+```
 
+Deploy all canisters:
+```bash
 dfx deploy
+```
 
-# hub_client_canister
-# Switch environment if desired (Mainnet vs. Testnet)
+---
+
+## Hub Client Canister
+
+### Switch Environment (Mainnet or Testnet)
+```bash
 dfx canister call hub_client_canister setDeploymentEnv '(variant { Testnet })'
+```
 
-Hub canister id: 
-- Mannet: n6ii2-2yaaa-aaaaj-azvia-cai
-- Testnet:  l5h5f-miaaa-aaaal-qjioq-cai
+- **Hub Canister ID**:
+  - Mainnet: `n6ii2-2yaaa-aaaaj-azvia-cai`
+  - Testnet: `l5h5f-miaaa-aaaal-qjioq-cai`
 
-target_chain_id: 
-- Mainnet: base
-- Testnet: base_sepolia
+- **Target Chain ID**:
+  - Mainnet: `base`
+  - Testnet: `base_sepolia`
 
-# Bridge ICRC tokens
-**bridge base to ICRC**
+### Bridge ICRC Tokens
+Bridge Base to ICRC:
+```bash
 dfx canister call wallet_canister burnBaseToken '(
   8453:nat,                    // chainId for Base
   blob "yourDerivationPath",
@@ -54,30 +80,28 @@ dfx canister call wallet_canister burnBaseToken '(
   1000000:nat,                // amount to burn
   "icp"                        // target chain
 )'
+```
 
-signs an eip1559call 
+Signs an EIP-1559 call:
+```plaintext
 burn(1000000, "icp")
+```
 
+---
 
-# Send an irc1 token
-dfx canister call hub_client_canister send_icrc1_tokens '(
-  principal "<ICRC1_TOKEN_CANISTER>",
-  "myFromAddress",
-  "myToAddress",
-  500000:nat,
-  null,               # fromSubaccount
-  null                # fee
-)'
+## Wallet Canister
 
-# wallet_canister
-# Check your EVM address 
+### Check Your EVM Address
+```bash
 dfx canister call wallet_canister getEvmAddress
+```
 
-# Send an ERC-20 token 
+### Send an ERC-20 Token
+```bash
 dfx canister call wallet_canister sendErc20 '(
   principal "<EVM_RPC_CANISTER>",
   record {},
-  "0x14A04d7Dec9299121f7842a4446f15d04C4111d5",  # token address
+  "0x14A04d7Dec9299121f7842a4446f15d04C4111d5",  // token address
   "0xRecipient",
   100000000:nat,
   2000000000:nat,
@@ -86,15 +110,19 @@ dfx canister call wallet_canister sendErc20 '(
   variant { Ethereum = null },
   blob "yourPublicKey"
 )'
+```
 
-# Mint an NFT
+### Mint an NFT
+```bash
 dfx canister call wallet_canister doEthereumMintNFT '( ... )'
+```
 
-# Call Baseswap Smart Contract
-base chain id: 8453
-call contract at 0xde151d5c92bfaa288db4b67c21cd55d5826bcc93
+### Call BaseSwap Smart Contract
+- **Base Chain ID**: `8453`
+- **Contract Address**: `0xde151d5c92bfaa288db4b67c21cd55d5826bcc93`
 
-**baseswap contract calls**
+BaseSwap Contract Calls:
+```bash
 dfx canister call wallet_canister callBaseProxyContract '(
   record {
     chainId = 8453:nat;
@@ -106,14 +134,18 @@ dfx canister call wallet_canister callBaseProxyContract '(
     args = vec { variant { uint256 = 1234:nat } };
   }
 )'
+```
 
-**eip1559 calls**
+---
+
+## EIP-1559 Calls
+```bash
 dfx canister call wallet_canister makeEthereumValueTrx '(
   record {
     canisterId = principal "<EVM_RPC_CANISTER_PID>";
     rpcs = record {};
     to = "0xRecipient";
-    value = 1000000000000000000:nat; // e.g. 1 ETH
+    value = 1000000000000000000:nat; // e.g., 1 ETH
     gasPrice = 2000000000:nat;
     gasLimit = 300000:nat;
     maxPriorityFeePerGas = 1500000000:nat;
@@ -122,13 +154,13 @@ dfx canister call wallet_canister makeEthereumValueTrx '(
     publicKey = blob "somePublicKey";
   }
 )'
+```
 
+---
 
-**nfts:**
--mintnft: calls "mint_icrc99(uint256,address,string)" on an NFT contract.
--sendErc20: calls "transfer(address,uint256)" on an ERC-20 contract
+## NFTs
+- **Mint NFT**:
+  Calls `mint_icrc99(uint256,address,string)` on an NFT contract.
 
-
-
-
-
+- **Send ERC-20**:
+  Calls `transfer(address,uint256)` on an ERC-20 contract.
