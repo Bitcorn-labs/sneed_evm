@@ -259,7 +259,7 @@ actor {
     derivationPath : Blob;
   };
 
-  // F) eip1559Call => improved ECDSA usage/
+  // eip1559Call = generic to call evm contracts
   public shared({caller}) func eip1559Call(p : Eip1559Params) : async Result.Result<Text, TxError> {
     if (!is_owner(caller)) { return #err(#NotOwner) };
     let nonce = getNextNonce(p.derivationPath);
@@ -348,8 +348,7 @@ actor {
     eip1559Call(txParams)
   }
 
-  // Additional calls
-  // A function to call a baseswap comtract
+  // baseswap contract calls
   public type BaseCallParams = {
     chainId : Nat;            
     gasLimit : Nat;           
@@ -377,7 +376,26 @@ actor {
     eip1559Call(txParams)
   }
 
-//send erc20
+  /// A record describing the parameters for increaseLiquidity:
+public type IncreaseLiquidityParams = {
+  chainId : Nat;
+  derivationPath : Blob;
+  gasLimit : Nat;
+  maxFeePerGas : Nat;
+  maxPriorityFeePerGas : Nat;
+
+  // the function arguments
+  token0 : Text;          // e.g. "0xToken0"
+  token1 : Text;          // e.g. "0xToken1"
+  amount0Desired : Nat;
+  amount1Desired : Nat;
+  amount0Min : Nat;
+  amount1Min : Nat;
+  recipient : Text;       // e.g. "0xRecipient"
+  deadline : Nat;
+};
+
+//send erc20 token
   public type Erc20Params = {
     tokenAddress : Text;
     to : Text;
@@ -425,8 +443,6 @@ actor {
   }) : async Result.Result<Text, TxError> {
     if (!is_owner(caller)) { return #err(#NotOwner) };
     // build EIP-1559 data => call eip1559Call(...)
-    #err(#GenericError("Implementation omitted for brevity; adapt from eip1559Call."))
-  }
 
   public shared({caller}) func makeEthereumTrx(request : {
     canisterId : Principal;
