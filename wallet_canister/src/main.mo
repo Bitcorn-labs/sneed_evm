@@ -430,37 +430,119 @@ public type IncreaseLiquidityParams = {
   }
 
   public shared({caller}) func makeEthereumValueTrx(request : {
-    canisterId : Principal;
-    rpcs : EVMRPC.RpcServices;
-    to : Text;
-    value : Nat;
-    gasPrice : Nat;
-    gasLimit : Nat;
-    maxPriorityFeePerGas : Nat;
-    network : Network;
-    tecdsaSha : Blob;
-    publicKey : [Nat8];
-  }) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
-    // build EIP-1559 data => call eip1559Call(...)
+  canisterId : Principal;
+  rpcs : EVMRPC.RpcServices;
+  to : Text;
+  value : Nat;
+  gasPrice : Nat;
+  gasLimit : Nat;
+  maxPriorityFeePerGas : Nat;
+  network : Network;
+  tecdsaSha : Blob;
+  publicKey : [Nat8];
+}) : async Result.Result<Text, TxError> {
+  if (!is_owner(caller)) { 
+    return #err(#NotOwner); 
+  };
+
+  // 1) Determine chainId from `request.network`
+  let chainId = switch (request.network) {
+    case (#Ethereum(val)) {
+      switch (val) {
+        case null { 1 };         // default to Ethereum mainnet
+        case (?cid) { cid };     // or user-specified chain ID
+      }
+    };
+    case (#Base(val)) {
+      switch (val) {
+        case null { 8453 };      // default to Base mainnet
+        case (?cid) { cid };
+      }
+    };
+  };
+
+  // 2) Build the EIP-1559 parameters
+  let txParams : Eip1559Params = {
+    to = request.to;
+    value = request.value;
+    // no extra data => purely sending ETH => "0x"
+    data = "0x";
+    gasLimit = request.gasLimit;
+    maxFeePerGas = request.gasPrice;           // `gasPrice` is your maxFeePerGas
+    maxPriorityFeePerGas = request.maxPriorityFeePerGas;
+    chainId = chainId;
+    derivationPath = request.tecdsaSha;
+  };
+
+  // 3) Reuse your eip1559Call(...) => signs + broadcasts the EIP-1559 transaction
+  return await eip1559Call(txParams);
+}
 
   public shared({caller}) func makeEthereumTrx(request : {
-    canisterId : Principal;
-    rpcs : EVMRPC.RpcServices;
-    method : Text;
-    args : [Nat8];
-    gasPrice : Nat;
-    gasLimit : Nat;
-    maxPriorityFeePerGas : Nat;
-    contract : Text;
-    network : Network;
-    tecdsaSha : Blob;
-    publicKey : [Nat8];
-  }) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner) };
-    // build methodSig => encode => eip1559Call => signWithEcdsa
-    #err(#GenericError("Implementation omitted for brevity; adapt from eip1559Call."))
+  canisterId : Principal;
+  rpcs : EVMRPC.RpcServices;
+  method : Text;       // e.g. "transfer(address,uint256)"
+  args : [Nat8];       // raw ABI data or partial
+  gasPrice : Nat;
+  gasLimit : Nat;
+  maxPriorityFeePerGas : Nat;
+  contract : Text;     // e.g. "0xERC20Contract"
+  network : Network;
+  tecdsaSha : Blob;    // derivation path
+  publicKey : [Nat8];
+}) : async Result.Result<Text, TxError> {
+  if (!is_owner(caller)) { 
+    return #err(#NotOwner); 
+  };
+
+  // 1) Determine chainId from `request.network`
+  let chainId = switch (request.network) {
+    case (#Ethereum(val)) {
+      switch (val) {
+        case null { 1 };
+        case (?cid) { cid };
+      }
+    };
+    case (#Base(val)) {
+      switch (val) {
+        case null { 8453 };
+        case (?cid) { cid };
+      }
+    };
+  };
+
+  // 2) If you want to automatically prepend the 4-byte method hash for `request.method`
+  //    we can do something like:
+  if (request.method.size() > 0) {
+    let sha3 = SHA3.Keccak(256);
+    sha3.update(Blob.toArray(Text.encodeUtf8(request.method)));
+    let methodHash = Array.take<Nat8>(sha3.finalize(), 4);
+
+    // combine methodHash + request.args
+    let combinedBuf = Buffer.Buffer<Nat8>(0);
+    combinedBuf.append(Buffer.fromArray<Nat8>(methodHash));
+    combinedBuf.append(Buffer.fromArray<Nat8>(request.args));
+
+    let finalData = Buffer.toArray<Nat8>(combinedBuf);
+
+    // 3) Build EIP-1559 params
+    let txParams : Eip1559Params = {
+      to = request.contract;
+      value = 0;      // no value transfer
+      data = "0x" # Hex.encode(finalData);
+      gasLimit = request.gasLimit;
+      maxFeePerGas = request.gasPrice;
+      maxPriorityFeePerGas = request.maxPriorityFeePerGas;
+      chainId = chainId;
+      derivationPath = request.tecdsaSha;
+    };
+
+    return await eip1559Call(txParams);
+
+  } else {
+    return #err(#GenericError("No method provided"));
   }
+}
 
   // bito bridge burn function (send base token, specict icp chain id)
   public shared({caller}) func burnBaseToken(
