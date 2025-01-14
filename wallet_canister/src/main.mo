@@ -122,7 +122,7 @@ stable var owner : Principal = Principal.fromText("aaaaa-aa");
 // BTreeMap for (derivationPath -> nextNonce)
 stable let nonceMap = StableBTreemap.init<Blob, Nat>(1, Blob.compare);
 // ECDSA key name
-stable var ecdsaKeyName : Text = "dfx_test_key";
+stable var ecdsaKeyName : Text = "Key_1";
 // EVM RPC canister ID
 stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai";
 // Env setting
