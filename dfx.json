@@ -1,14 +1,26 @@
 {
   "canisters": {
-      "hub_client_canister": {
+    "hub_client_canister": {
       "type": "motoko",
       "main": "hub_client_canister/src/main.mo",
-      "candid": "hub_client_canister/hub.did"
+      "candid": "hub_client_canister/hub.did",
+      "metadata": [
+        {
+          "name": "candid:service",
+          "value": "hub_client_canister/hub.did"
+        }
+      ]
     },
-      "wallet_canister": {
+    "wallet_canister": {
       "type": "motoko",
       "main": "wallet_canister/src/main.mo",
       "candid": "wallet_canister/src/wallet_canister.did",
+      "metadata": [
+        {
+          "name": "candid:service",
+          "value": "wallet_canister/src/wallet_canister.did"
+        }
+      ],
       "features": ["http_requests"],
       "ecdsa_signing": {
         "key_name": "Key_1"
@@ -19,11 +31,10 @@
       "id": "7hfb6-caaaa-aaaar-qadga-cai"
     }
   },
-    "defaults": {
-      "build": {
+  "defaults": {
+    "build": {
       "packtool": "mops sources"
     }
-  },
   },
   "networks": {
     "local": {
@@ -33,3 +44,4 @@
   },
   "version": 1
 }
+
