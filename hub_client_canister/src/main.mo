@@ -1,6 +1,8 @@
 import Hub "hub_client_canister/hub.did";
 import Debug "mo:base/Debug";
 
+import ICRC1 "mo:icrc1.mo";
+
 public type DeploymentEnv = {
   #Mainnet;
   #Testnet;
