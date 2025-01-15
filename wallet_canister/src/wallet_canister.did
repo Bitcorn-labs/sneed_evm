@@ -1,0 +1,172 @@
+type DeploymentEnv = variant { Mainnet; Testnet };
+
+type TxError = variant {
+  NotOwner;
+  InvalidSignature;
+  NonceTooLow;
+  NonceTooHigh;
+  InsufficientFunds;
+  RpcError : text;
+  GenericError : text;
+};
+
+/// A generic result type for returning either `Ok` or a `TxError`.
+type TxResult<T> = variant { ok : T; err : TxError };
+
+/// The EIP-1559 parameters used by `eip1559Call`, `makeEthereumValueTrx`, etc.
+type Eip1559Params = record {
+  to : text;
+  value : nat;
+  data : blob;
+  gasLimit : nat;
+  maxFeePerGas : nat;
+  maxPriorityFeePerGas : nat;
+  chainId : nat;
+  derivationPath : blob;
+};
+
+/// A structure describing an ERC-20 send
+type Erc20Params = record {
+  tokenAddress : text;
+  to : text;
+  amount : nat;
+  gasLimit : nat;
+  maxFeePerGas : nat;
+  maxPriorityFeePerGas : nat;
+  chainId : nat;
+  derivationPath : blob;
+};
+
+/// A structure describing the pointer to an NFT
+type RemoteNFTPointer = record {
+  tokenId : nat;
+  contract : text;
+  network : variant { Ethereum : opt nat; Base : opt nat };
+};
+
+/// Additional record for minting an NFT
+type MintParams = record {
+  pointer : RemoteNFTPointer;
+  to : text;
+  uri : text;
+  gasLimit : nat;
+  maxFeePerGas : nat;
+  maxPriorityFeePerGas : nat;
+  derivationPath : blob;
+};
+
+/// The parameters for calling the Base proxy contract
+type BaseCallParams = record {
+  chainId : nat;
+  gasLimit : nat;
+  maxFeePerGas : nat;
+  maxPriorityFeePerGas : nat;
+  derivationPath : blob;
+  methodSig : text;
+  args : vec blob; // or `vec variant { ... }` if you want typed arguments
+};
+
+/// The parameters for calling increaseLiquidity
+type IncreaseLiquidityParams = record {
+  chainId : nat;
+  derivationPath : blob;
+  gasLimit : nat;
+  maxFeePerGas : nat;
+  maxPriorityFeePerGas : nat;
+  tokenId : nat;
+  amount0Desired : nat;
+  amount1Desired : nat;
+  amount0Min : nat;
+  amount1Min : nat;
+  recipient : text;
+  deadline : nat;
+};
+
+/// The actor service definition
+service : {
+  //---------------------------------------------
+  // Admin & Environment
+  //---------------------------------------------
+  setOwner : (principal) -> () ;
+  setEnv : (DeploymentEnv) -> () ;
+  getEnv : () -> (DeploymentEnv) query;
+  getOwner : () -> (principal) query;
+
+  //---------------------------------------------
+  // ECDSA/EVM
+  //---------------------------------------------
+  getEvmAddress : () -> (text) query;
+
+  //---------------------------------------------
+  // EIP-1559
+  //---------------------------------------------
+  eip1559Call : (Eip1559Params) -> (TxResult<text>);
+  
+  //---------------------------------------------
+  // Example: Mint NFT
+  //---------------------------------------------
+  mintNft : (MintParams) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // Base Contract Calls
+  //---------------------------------------------
+  callBaseProxyContract : (BaseCallParams) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // Increase Liquidity
+  //---------------------------------------------
+  increaseLiquidityBaseSwap : (IncreaseLiquidityParams) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // ERC-20
+  //---------------------------------------------
+  sendErc20 : (Erc20Params) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // Sending ETH / Base
+  //---------------------------------------------
+  makeEthereumValueTrx : (record {
+    canisterId : principal;
+    rpcs : blob;           // or define a more precise type if needed
+    to : text;
+    value : nat;
+    gasPrice : nat;
+    gasLimit : nat;
+    maxPriorityFeePerGas : nat;
+    network : variant { Ethereum : opt nat; Base : opt nat };
+    tecdsaSha : blob;
+    publicKey : blob;
+  }) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // Generic EVM Tx
+  //---------------------------------------------
+  makeEthereumTrx : (record {
+    canisterId : principal;
+    rpcs : blob;
+    method : text;
+    args : blob;
+    gasPrice : nat;
+    gasLimit : nat;
+    maxPriorityFeePerGas : nat;
+    contract : text;
+    network : variant { Ethereum : opt nat; Base : opt nat };
+    tecdsaSha : blob;
+    publicKey : blob;
+  }) -> (TxResult<text>);
+
+  //---------------------------------------------
+  // Burn base token bridging
+  //---------------------------------------------
+  burnBaseToken : (record {
+    chainId : nat;
+    derivationPath : blob;
+    maxFeePerGas : nat;
+    maxPriorityFeePerGas : nat;
+    gasLimit : nat;
+    toChainBytes : blob;
+    tokenAddress : text;
+    withdrawAmount : nat;
+    icpAddress : text;
+  }) -> (TxResult<text>);
+}
