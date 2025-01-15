@@ -2,13 +2,6 @@
 ## Multi-Canister Approach to Bridging ICRCs to EVM with a Handler Canister
 
 Sneed EVM interface and handler.
-
-### Acknowledgements
-- Thank you, Bitomni.
-- Thank you, ICDevs.
-- Thank you, Sneed DAO.
-- Thank you, Bitcorn Labs.
-
 ---
 
 ## Project Overview
@@ -145,6 +138,26 @@ dfx canister call wallet_canister callBaseProxyContract '(
 )'
 ```
 
+### Increase Liquidity on BaseSwap
+```bash
+dfx canister call wallet_canister increaseLiquidityBaseSwap '(
+  record {
+    chainId = 8453:nat;                 // Base mainnet chain ID
+    derivationPath = blob "myPath";     // or any derivation path as bytes
+    gasLimit = 300000:nat;             
+    maxFeePerGas = 2000000000:nat;      // 2 Gwei
+    maxPriorityFeePerGas = 1500000000:nat;
+    tokenId = 1234:nat;                 // The token ID representing your position
+    amount0Desired = 1000000000000000000:nat;   // e.g. 1.0 of token0 in wei
+    amount1Desired = 2000000000000000000:nat;   // e.g. 2.0 of token1 in wei
+    amount0Min = 900000000000000000:nat;        // 0.9 min
+    amount1Min = 1900000000000000000:nat;       // 1.9 min
+    recipient = "0xYourEvmAddressHere";         // e.g. "0xabc123..."
+    deadline = 1699999999:nat;                  // a future Unix timestamp
+  }
+)'
+```
+
 ### Bridge Base to ICRC:
 ```bash
 dfx canister call wallet_canister burnBaseToken '(
@@ -183,10 +196,14 @@ dfx canister call wallet_canister makeEthereumValueTrx '(
 ```
 
 ---
-
 ## NFTs
 - **Mint NFT**:
   Calls `mint_icrc99(uint256,address,string)` on an NFT contract.
 
-- **Send ERC-20**:
-  Calls `transfer(address,uint256)` on an ERC-20 contract.
+
+
+### Acknowledgements
+- Thank you, Bitomni.
+- Thank you, ICDevs.
+- Thank you, Sneed DAO.
+- Thank you, Bitcorn Labs.
