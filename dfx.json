@@ -13,9 +13,7 @@
       }
     },
     "metadata": {
-      "name": "sneedbridge",
-      "description": "thank your raj",
-      "version": "0.1.0"
+      "name": "candid:service",
     },
     "evm_rpc": {
       "type": "pull",
