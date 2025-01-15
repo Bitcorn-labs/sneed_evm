@@ -115,12 +115,8 @@ dfx canister call wallet_canister sendErc20 '(
 )'
 ```
 
-### Mint an NFT
-```bash
-dfx canister call wallet_canister doEthereumMintNFT '( ... )'
-```
 
-### Call BaseSwap Smart Contract
+### Call BaseSwap Smart Factory Contract
 - **Base Chain ID**: `8453`
 - **Contract Address**: `0xde151d5c92bfaa288db4b67c21cd55d5826bcc93`
 
@@ -177,7 +173,7 @@ burn(1000000, "icp")
 
 ---
 
-## EIP-1559 Calls
+## Generic EIP-1559 Calls
 ```bash
 dfx canister call wallet_canister makeEthereumValueTrx '(
   record {
