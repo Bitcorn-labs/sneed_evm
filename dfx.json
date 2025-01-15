@@ -16,6 +16,7 @@
     },
     "metadata": {
       "name": "candid:service",
+    }
     },
     "evm_rpc": {
       "type": "pull",
