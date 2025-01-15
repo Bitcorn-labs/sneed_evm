@@ -1,15 +1,17 @@
 {
   "canisters": {
-    "hub_client_canister": {
+      "hub_client_canister": {
       "type": "motoko",
-      "src": "hub_client_canister/src/main.mo"
+      "main": "hub_client_canister/src/main.mo",
+      "candid": "hub_client_canister/hub.did"
     },
-    "wallet_canister": {
+      "wallet_canister": {
       "type": "motoko",
-      "src": "wallet_canister/src/main.mo",
+      "main": "wallet_canister/src/main.mo",
+      "candid": "wallet_canister/src/wallet_canister.did",
       "features": ["http_requests"],
       "ecdsa_signing": {
-        "key_name": "key_1"
+        "key_name": "Key_1"
       }
     },
     "metadata": {
