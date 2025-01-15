@@ -69,23 +69,28 @@ dfx canister call hub_client_canister setDeploymentEnv '(variant { Testnet })'
   - Testnet: `base_sepolia`
 
 ### Bridge ICRC Tokens
-Bridge Base to ICRC:
+Bridge ICRC to Base:
 ```bash
-dfx canister call wallet_canister burnBaseToken '(
-  8453:nat,                    // chainId for Base
-  blob "yourDerivationPath",
-  2000000000:nat,             // maxFeePerGas
-  1500000000:nat,             // maxPriorityFeePerGas
-  300000:nat,                 // gasLimit
-  1000000:nat,                // amount to burn
-  "icp"                        // target chain
+dfx canister call hub_client_canister bridgeICRCToken '(
+  principal "aaaaa-bbb-ccc-ddddd-cai",  // tokenPid
+  null,                                 // fromTxId
+  "0xRecipientEvmAddress",
+  null,                                 // fromAddress
+  1000000000:nat                        // amount
+)'
+```
+Send an ICRC1:
+```bash
+dfx canister call hub_client_canister send_icrc1_tokens '(
+  principal "icrc1-canister-id", // tokenCanister
+  "sender-text-addr",            // from
+  "recipient-text-addr",         // to
+  50000:nat,                     // amount
+  null                           // fee
 )'
 ```
 
-Signs an EIP-1559 call:
-```plaintext
-burn(1000000, "icp")
-```
+
 
 ---
 
@@ -134,6 +139,23 @@ dfx canister call wallet_canister callBaseProxyContract '(
     args = vec { variant { uint256 = 1234:nat } };
   }
 )'
+```
+
+### Bridge Base to ICRC:
+```bash
+dfx canister call wallet_canister burnBaseToken '(
+  8453:nat,                    // chainId for Base
+  blob "yourDerivationPath",
+  2000000000:nat,             // maxFeePerGas
+  1500000000:nat,             // maxPriorityFeePerGas
+  300000:nat,                 // gasLimit
+  1000000:nat,                // amount to burn
+  "icp"                        // target chain
+)'
+```
+Signs an EIP-1559 call:
+```plaintext
+burn(1000000, "icp")
 ```
 
 ---
