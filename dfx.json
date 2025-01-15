@@ -12,6 +12,12 @@
         "key_name": "key_1"
       }
     },
+    "metadata": {
+      "name": "My Wallet Canister",
+      "description": "thank your raj",
+      "version": "0.1.0"
+      }
+    },
     "evm_rpc": {
       "type": "pull",
       "id": "7hfb6-caaaa-aaaar-qadga-cai"
