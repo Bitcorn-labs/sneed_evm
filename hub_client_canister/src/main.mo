@@ -1,12 +1,9 @@
-import Hub "hub_client_canister/hub.did";
+import Hub "hub_client_canister/hub.did"; 
 import Debug "mo:base/Debug";
+import Principal "mo:base/Principal";
+import Text "mo:base/Text";
 
-import ICRC1 "mo:icrc1.mo";
-
-public type DeploymentEnv = {
-  #Mainnet;
-  #Testnet;
-};
+public type DeploymentEnv = { #Mainnet; #Testnet };
 
 func getHubCanisterId(env : DeploymentEnv) : principal {
   switch (env) {
@@ -22,12 +19,9 @@ func getTargetChainId(env : DeploymentEnv) : Text {
   }
 };
 
+//ICRC-1 calls
 module ICRC1 {
-  public type BalanceOfArgs = {
-    owner : blob;
-    subaccount : ?blob;
-  };
-
+  public type BalanceOfArgs = { owner : blob; subaccount : ?blob };
   public type TransferArgs = {
     from_subaccount : ?blob;
     to : blob;
@@ -36,7 +30,6 @@ module ICRC1 {
     memo : ?blob;
     amount : nat;
   };
-
   public type TransferError = variant {
     BadFee : record { expected_fee : nat };
     BadBurn : record { min_burn_amount : nat };
@@ -47,9 +40,7 @@ module ICRC1 {
     TemporarilyUnavailable;
     GenericError : record { message : text; error_code : nat };
   };
-
   public type TransferResult = variant { Ok : nat; Err : TransferError };
-
   public type ICRC1Service = actor {
     icrc1_balance_of : (BalanceOfArgs) -> (nat) query;
     icrc1_transfer : (TransferArgs) -> (TransferResult);
@@ -58,19 +49,25 @@ module ICRC1 {
 
 actor {
 
+  // stable environment var (Mainnet|Testnet)
   stable var env : DeploymentEnv = #Testnet;
 
+  // blacklist
   stable var blacklistedAddresses : [Text] = ["poopoo", "peepee"];
 
+  // Set environment
   public shared({caller}) func setDeploymentEnv(newEnv : DeploymentEnv) : async () {
+    // Optional: check owner
     env := newEnv;
   };
 
+  // Return an actor reference to the Hub canister
   private func hubActor() : Hub.service {
     let pid = getHubCanisterId(env);
     return actor(pid) : Hub.service;
   };
 
+  // Bridge ICRC token to Base (mainnet or testnet)
   public shared(msg) func bridgeICRCToken(
     tokenPid : principal,
     fromTxId : ?Text,
@@ -78,13 +75,10 @@ actor {
     fromAddress : ?Text,
     amount : Nat
   ) : async Hub.Result_1 {
-
     let chainId = getTargetChainId(env);
-    Debug.print(
-      "Bridging tokens => chain=" # chainId
+    Debug.print("Bridging tokens => chain=" # chainId
       # ", recipient=" # recipientEvmAddress
-      # ", amount=" # Nat.toText(amount)
-    );
+      # ", amount=" # Nat.toText(amount));
 
     let bridgeArgs : Hub.BridgeArgs = {
       token = tokenPid;
@@ -98,111 +92,22 @@ actor {
     return await hubActor().bridge(bridgeArgs);
   };
 
-  public shared(msg) func add_cached_events(events : [Hub.CachedRelayerEvent]) : async Hub.Result {
-    return await hubActor().add_cached_events(events);
-  };
-
-  public shared(msg) func add_chains(chains : [Hub.AddChainArgs]) : async Hub.Result {
-    return await hubActor().add_chains(chains);
-  };
-
-  public shared(msg) func add_token_chain(args : Hub.AddTokenChainArgs) : async Hub.Result {
-    return await hubActor().add_token_chain(args);
-  };
-
-  public shared(msg) func add_tokens(tokens : [Hub.AddTokenArgs]) : async Hub.Result {
-    return await hubActor().add_tokens(tokens);
-  };
-
-  public shared(msg) func claimed(args : Hub.ClaimedArg) : async Hub.Result_2 {
-    return await hubActor().claimed(args);
-  };
-
-  public shared(msg) func delete_cached_event(eventId : Text) : async Hub.Result {
-    return await hubActor().delete_cached_event(eventId);
-  };
-
-  public shared(query) func get_admin() : async principal {
-    return await hubActor().get_admin();
-  };
-
-  public shared(msg) func get_assets_by_chain_id(chainId : Text) : async Hub.Result_3 {
-    return await hubActor().get_assets_by_chain_id(chainId);
-  };
-
-  public shared(msg) func get_assets_by_token_pid(tokenPid : principal) : async Hub.Result_3 {
-    return await hubActor().get_assets_by_token_pid(tokenPid);
-  };
-
-  public shared(query) func get_chain(chainId : Text) : async ?Hub.SupportedChain {
-    return await hubActor().get_chain(chainId);
-  };
-
-  public shared(query) func get_histories(args : Hub.GetHistoryRequest) : async Hub.GetHistoryResponse {
-    return await hubActor().get_histories(args);
-  };
-
-  public shared(query) func get_minter_address_of_chain(chainId : Text) : async ?Text {
-    return await hubActor().get_minter_address_of_chain(chainId);
-  };
-
-  public shared(query) func get_protocol_fee_percentage() : async ?Nat16 {
-    return await hubActor().get_protocol_fee_percentage();
-  };
-
-  public shared(query) func get_support_chains() : async [Hub.SupportedChain] {
-    return await hubActor().get_support_chains();
-  };
-
-  public shared(query) func get_support_tokens() : async [Hub.SupportedToken] {
-    return await hubActor().get_support_tokens();
-  };
-
-  public shared(msg) func pause() : async Hub.Result {
-    return await hubActor().pause();
-  };
-
-  public shared(msg) func resume() : async Hub.Result {
-    return await hubActor().resume();
-  };
-
-  public shared(msg) func set_protocol_fee_percentage(fee : Nat16) : async Hub.Result {
-    return await hubActor().set_protocol_fee_percentage(fee);
-  };
-
-  public shared(query) func sync_histories(args : Hub.SyncHistoryRequest) : async Hub.SyncHistoryResponse {
-    return await hubActor().sync_histories(args);
-  };
-
-  public shared(msg) func update_chain(args : Hub.AddChainArgs) : async Hub.Result {
-    return await hubActor().update_chain(args);
-  };
-
-  public shared(msg) func update_token(args : Hub.AddTokenArgs) : async Hub.Result {
-    return await hubActor().update_token(args);
-  };
-
-  public shared(msg) func update_token_chain_address(args : Hub.AddTokenChainArgs) : async Hub.Result {
-    return await hubActor().update_token_chain_address(args);
-  };
-
+  // ICRC-1 validation logic
   public shared(query) func validate_send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
     to : Text,
     amount : Nat
   ) : async Bool {
-    // 1) blacklisted check
     if (blacklistedAddresses.contains(to)) {
       Debug.print("Address blacklisted => " # to);
       return false;
     };
-    // 2) disallow from == to
     if (from == to) {
       Debug.print("Cannot send to self => " # from);
       return false;
     };
-    // 3) check balance
+    // check balances
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
     let fromBlob = textToBlob(from);
     let bal = await icrc1Actor.icrc1_balance_of({owner = fromBlob; subaccount = null});
@@ -211,9 +116,10 @@ actor {
       Debug.print("Not enough balance => " # Nat.toText(bal) # " < " # Nat.toText(amount));
       return false;
     };
-    return true;
+    true;
   };
 
+  // Send ICRC tokens
   public shared(msg) func send_icrc1_tokens(
     tokenCanister : principal,
     from : Text,
@@ -221,8 +127,7 @@ actor {
     amount : Nat,
     fee : ?Nat
   ) : async ICRC1.TransferResult {
-
-    Debug.assert(is_owner(msg.caller));
+    Debug.print("Attempting to send ICRC from=" # from # " to=" # to # " amt=" # Nat.toText(amount));
     let canSend = await validate_send_icrc1_tokens(tokenCanister, from, to, amount);
     if (!canSend) {
       return #err(#GenericError({
@@ -234,7 +139,7 @@ actor {
     let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
 
     let tArgs : ICRC1.TransferArgs = {
-      from_subaccount = subAcc;
+      from_subaccount = null;   // or some subaccount if needed
       to = textToBlob(to);
       fee = fee;
       created_at_time = null;
@@ -247,18 +152,19 @@ actor {
     return result;
   };
 
+  // A text->blob helper
   private func textToBlob(acc : Text) : Blob {
     return Text.encodeUtf8(acc);
   };
 
-  private func is_owner(principal : Principal) : Bool { 
-  if (Principal.isController(principal)) { return true; };
-  if (Principal.fromText("sneed-gov-here") == principal) { return true; };
-  return false;
-  };
-
-  // A debug helper
+  // `debug_show`
   private func debug_show<T>(x : T) : text {
     return Debug.printable(x);
+  };
+
+  private func is_canister_owner(principal : Principal) : Bool {
+    if (principal == owner) { return true };
+    // or check if Principal.isController(principal)
+    false
   };
 }
