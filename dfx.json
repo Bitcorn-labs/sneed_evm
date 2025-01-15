@@ -14,14 +14,16 @@
         "key_name": "Key_1"
       }
     },
-    "metadata": {
-      "name": "candid:service",
-      }
-    },
     "evm_rpc": {
       "type": "pull",
       "id": "7hfb6-caaaa-aaaar-qadga-cai"
     }
+  },
+    "defaults": {
+      "build": {
+      "packtool": "mops sources"
+    }
+  },
   },
   "networks": {
     "local": {
