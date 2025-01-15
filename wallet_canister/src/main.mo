@@ -80,24 +80,31 @@ public module Result {
 ////////////////////////////////////////////////////
 // Environment & Network
 ////////////////////////////////////////////////////
-public type DeploymentEnv = {
-  #Mainnet;
-  #Testnet;
+
+// For variants with constructors, you can do:
+public type DeploymentEnv = variant {
+  Mainnet;
+  Testnet;
 };
 
+// Another variant:
 public type Network = variant {
   Ethereum : opt Nat;
   Base : opt Nat;
 };
 
-public type RemoteNFTPointer = {
+// For a record with fields, must use "record":
+public type RemoteNFTPointer = record {
   tokenId : Nat;
   contract : Text;
   network : Network;
 };
 
+////////////////////////////////////////////////////
 // Example bridging snippet
+////////////////////////////////////////////////////
 module Hub {
+  // "record" for named fields
   public type BridgeArgs = record {
     token : principal;
     from_tx_id : opt text;
@@ -106,9 +113,11 @@ module Hub {
     from_address : opt text;
     amount : nat;
   };
+
   public type BridgeResponse = record { history_id : nat64 };
   public type HubError = variant { PermissionDenied; };
   public type Result_1 = variant { Ok : BridgeResponse; Err : HubError };
+
   public type HubService = actor {
     bridge : (BridgeArgs) -> (Result_1);
   };
@@ -132,17 +141,17 @@ stable var env : DeploymentEnv = #Testnet;
 // Management canister for ECDSA
 ////////////////////////////////////////////////////
 type ICManagement = actor {
-  ecdsa_public_key : ({
+  ecdsa_public_key : (record {
     canister_id : ?Principal;
     derivation_path : [Blob];
-    key_id : { curve : { #secp256k1 }; name : Text };
-  }) -> async ({ public_key : Blob; chain_code : Blob });
+    key_id : record { curve : variant { secp256k1 }; name : Text };
+  }) -> async record { public_key : Blob; chain_code : Blob };
 
-  sign_with_ecdsa : ({
+  sign_with_ecdsa : (record {
     message_hash : Blob;
     derivation_path : [Blob];
-    key_id : { curve : { #secp256k1 }; name : Text };
-  }) -> async ({ signature : Blob });
+    key_id : record { curve : variant { secp256k1 }; name : Text };
+  }) -> async record { signature : Blob };
 };
 
 ////////////////////////////////////////////////////
@@ -150,8 +159,8 @@ type ICManagement = actor {
 ////////////////////////////////////////////////////
 private func is_owner(p : Principal) : Bool {
   // If you do NOT want the controller to have ownership rights, remove this line:
-  if (Principal.isController(p)) { 
-    return true; 
+  if (Principal.isController(p)) {
+    return true;
   };
   p == owner
 };
@@ -193,7 +202,6 @@ private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, TxError> {
 // Actor Definition
 ////////////////////////////////////////////////////
 actor {
-
   //---------------------------------------------
   // Admin & Env Functions
   //---------------------------------------------
@@ -284,7 +292,8 @@ actor {
   //---------------------------------------------
   // EIP-1559 Generic Calls
   //---------------------------------------------
-  public type Eip1559Params = {
+  // Must use 'record' for named fields:
+  public type Eip1559Params = record {
     to : Text;
     value : Nat;
     data : [Nat8];
@@ -363,7 +372,8 @@ actor {
   //---------------------------------------------
   // Mint NFT (Example)
   //---------------------------------------------
-  public type MintParams = {
+  // "record" for the type definition:
+  public type MintParams = record {
     pointer : RemoteNFTPointer;
     to : Text;
     uri : Text;
@@ -409,8 +419,7 @@ actor {
   //---------------------------------------------
   // BaseSwap Contract Interactions
   //---------------------------------------------
-  /// Generic function to call BaseSwap at "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93"
-  public type BaseCallParams = {
+  public type BaseCallParams = record {
     chainId : Nat;
     gasLimit : Nat;
     maxFeePerGas : Nat;
@@ -445,7 +454,6 @@ actor {
   //---------------------------------------------
   // Approve ERC20 for BaseSwap
   //---------------------------------------------
-  /// This is how you might specifically call `approve(address,uint256)`
   public shared({caller}) func baseSwapApprove(
     chainId : Nat,
     derivationPath : Blob,
@@ -481,13 +489,12 @@ actor {
   //---------------------------------------------
   // Increase Liquidity for BaseSwap
   //---------------------------------------------
-  public type IncreaseLiquidityParams = {
+  public type IncreaseLiquidityParams = record {
     chainId : Nat;
     derivationPath : Blob;
     gasLimit : Nat;
     maxFeePerGas : Nat;
     maxPriorityFeePerGas : Nat;
-    // The typical arguments for BaseSwap's "increaseLiquidity"
     tokenId : Nat;
     amount0Desired : Nat;
     amount1Desired : Nat;
@@ -497,15 +504,10 @@ actor {
     deadline : Nat;
   };
 
-  /// A sample specialized function to call `increaseLiquidity(...)` on BaseSwap
   public shared({caller}) func increaseLiquidityBaseSwap(
     p : IncreaseLiquidityParams
   ) : async Result.Result<Text, TxError> {
     if (!is_owner(caller)) { return #err(#NotOwner); };
-
-    // Typically: increaseLiquidity(uint256 tokenId, uint256 amount0Desired, 
-    // uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, 
-    // address recipient, uint256 deadline)
 
     let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
     let methodSig = "increaseLiquidity(uint256,uint256,uint256,uint256,uint256,address,uint256)";
@@ -536,7 +538,7 @@ actor {
   //---------------------------------------------
   // SEND ERC20
   //---------------------------------------------
-  public type Erc20Params = {
+  public type Erc20Params = record {
     tokenAddress : Text;
     to : Text;
     amount : Nat;
@@ -575,7 +577,7 @@ actor {
   //---------------------------------------------
   // MAKE ETH VALUE TRANSACTION (EIP-1559)
   //---------------------------------------------
-  public shared({caller}) func makeEthereumValueTrx(request : {
+  public shared({caller}) func makeEthereumValueTrx(request : record {
     canisterId : Principal;
     rpcs : EVMRPC.RpcServices;
     to : Text;
@@ -604,7 +606,6 @@ actor {
       };
     };
 
-    // We'll use `gasPrice` as maxFeePerGas, as is typical in a transitional approach
     let txParams : Eip1559Params = {
       to = request.to;
       value = request.value;
@@ -622,17 +623,17 @@ actor {
   //---------------------------------------------
   // MAKE GENERAL ETH TRANSACTION (EIP-1559)
   //---------------------------------------------
-  public shared({caller}) func makeEthereumTrx(request : {
+  public shared({caller}) func makeEthereumTrx(request : record {
     canisterId : Principal;
     rpcs : EVMRPC.RpcServices;
-    method : Text;       
-    args : [Nat8];       
+    method : Text;
+    args : [Nat8];
     gasPrice : Nat;
     gasLimit : Nat;
     maxPriorityFeePerGas : Nat;
-    contract : Text;     
+    contract : Text;
     network : Network;
-    tecdsaSha : Blob;    
+    tecdsaSha : Blob;
     publicKey : [Nat8];
   }) : async Result.Result<Text, TxError> {
     if (!is_owner(caller)) { return #err(#NotOwner); };
@@ -653,7 +654,6 @@ actor {
     };
 
     if (request.method.size() > 0) {
-      // Prepend 4-byte selector
       let sha3 = SHA3.Keccak(256);
       sha3.update(Blob.toArray(Text.encodeUtf8(request.method)));
       let methodHash = Array.take<Nat8>(sha3.finalize(), 4);
@@ -681,7 +681,7 @@ actor {
   }
 
   //---------------------------------------------
-  // BURN BASE TOKEN (Example bridging method)
+  // BURN BASE TOKEN 
   //---------------------------------------------
   public shared({caller}) func burnBaseToken(
     chainId : Nat,
@@ -736,3 +736,4 @@ actor {
     newArr
   }
 }
+
