@@ -3,22 +3,6 @@ import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 
-public type DeploymentEnv = { #Mainnet; #Testnet };
-
-func getHubCanisterId(env : DeploymentEnv) : principal {
-  switch (env) {
-    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
-    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };   // testnet
-  }
-};
-
-func getTargetChainId(env : DeploymentEnv) : Text {
-  switch (env) {
-    case (#Mainnet) { "base" };
-    case (#Testnet) { "base_sepolia" };
-  }
-};
-
 //ICRC-1 calls
 module ICRC1 {
   public type BalanceOfArgs = { owner : blob; subaccount : ?blob };
@@ -49,6 +33,21 @@ module ICRC1 {
 
 actor {
 
+public type DeploymentEnv = { #Mainnet; #Testnet };
+
+func getHubCanisterId(env : DeploymentEnv) : principal {
+  switch (env) {
+    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
+    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };   // testnet
+  }
+};
+
+func getTargetChainId(env : DeploymentEnv) : Text {
+  switch (env) {
+    case (#Mainnet) { "base" };
+    case (#Testnet) { "base_sepolia" };
+  }
+};
   // stable environment var (Mainnet|Testnet)
   stable var env : DeploymentEnv = #Testnet;
 
