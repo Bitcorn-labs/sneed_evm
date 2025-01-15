@@ -1,0 +1,6 @@
+[package]
+name = "hub_client_canister"
+version = "0.1.0"
+
+[dependencies]
+base = "0.13.0"
