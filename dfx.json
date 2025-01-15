@@ -16,7 +16,6 @@
       "name": "sneedbridge",
       "description": "thank your raj",
       "version": "0.1.0"
-      }
     },
     "evm_rpc": {
       "type": "pull",
