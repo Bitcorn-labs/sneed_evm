@@ -162,9 +162,10 @@ actor {
     return Debug.printable(x);
   };
 
-  private func is_canister_owner(principal : Principal) : Bool {
-    if (principal == owner) { return true };
-    // or check if Principal.isController(principal)
-    false
+  private func is_owner(principal : Principal) : Bool { 
+  if (Principal.isController(principal)) { return true; };
+  if (Principal.fromText("sneed-gov-here") == principal) { return true; };
+  return false;
   };
+
 }
