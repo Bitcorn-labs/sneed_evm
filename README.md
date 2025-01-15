@@ -71,13 +71,18 @@ dfx canister call hub_client_canister setDeploymentEnv '(variant { Testnet })'
 ### Bridge ICRC Tokens
 Bridge ICRC to Base:
 ```bash
+# 1) Switch to Mainnet environment
+dfx canister call hub_client_canister setDeploymentEnv '(variant { Mainnet })'
+
+# 2) Bridge 1,000,000 base units of your token to Base
 dfx canister call hub_client_canister bridgeICRCToken '(
-  principal "aaaaa-bbb-ccc-ddddd-cai",  // tokenPid
-  null,                                 // fromTxId
-  "0xRecipientEvmAddress",
-  null,                                 // fromAddress
-  1000000000:nat                        // amount
+  principal "ryjl3-tyaaa-aaaaa-aaaba-cai",        // tokenPid (the ICRC token)
+  null,                                          // fromTxId (some local TX ID, null)
+  "0xRecipientOnBase",                           // EVM address on Base
+  null,                                          // fromAddress if not needed
+  1000000:nat                                    // amount
 )'
+
 ```
 Send an ICRC1:
 ```bash
@@ -126,7 +131,6 @@ dfx canister call wallet_canister doEthereumMintNFT '( ... )'
 - **Base Chain ID**: `8453`
 - **Contract Address**: `0xde151d5c92bfaa288db4b67c21cd55d5826bcc93`
 
-BaseSwap Contract Calls:
 ```bash
 dfx canister call wallet_canister callBaseProxyContract '(
   record {
