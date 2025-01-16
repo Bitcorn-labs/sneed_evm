@@ -1,118 +1,49 @@
 import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Principal "mo:base/Principal";
-import Prim "mo:prim";
+//import StableBTreeMap "mo:stableheapbtreemap/BTree";
+import EVM "./EVM";
+import EVMRPC "./EVMRPC";
+import ABI "./ABI";
+import Hub "./Hub";
+import Buffer "mo:base/Buffer";
 import Cycles "mo:base/ExperimentalCycles";
 import Blob "mo:base/Blob";
 import Hash "mo:base/Hash";
-
+import Text "mo:base/Text";
+import Result "mo:base/Result";
+import Array "mo:base/Array";
+import SHA3 "mo:sha3";
+import Nat8 "mo:base/Nat8";
+import Nat64 "mo:base/Nat64";
+import Hex "./Hex";
+import Iter "mo:base/Iter";
+import StableTrieMap "mo:stable-trie/Map";
 // Data structure for concurrency-safe nonce management
-import StableBTreemap "mo:stableheapbtreemap/StableBTreemap";
 
 // Additional or optional imports
-import ICRC7 "mo:icrc7-mo/ICRC7";
-import ICRC3 "mo:icrc3-mo/ICRC3";
-import ICRC37 "mo:icrc37-mo/ICRC37";
-import Star "mo:star/Star";
-import LibSecp256k1 "mo:libsecp256k1/LibSecp256k1";
-import RLPRelaxed "mo:rlprelaxed/RlpRelaxed";
-import EVMTxs "mo:evm-txs/EvmTxs";
-import ClassPlus "mo:class-plus/ClassPlus";
-import TimerTool "mo:timer-tool/TimerTool";
+//import ICRC7 "mo:icrc7-mo/ICRC7";
+//import ICRC3 "mo:icrc3-mo/ICRC3";
+//import ICRC37 "mo:icrc37-mo/ICRC37";
+//import Star "mo:star/Star";
+//import LibSecp256k1 "mo:libsecp256k1/LibSecp256k1";
+//import RLPRelaxed "mo:rlprelaxed/RlpRelaxed";
+//import EVMTxs "mo:evm-txs/EvmTxs";
+//import ClassPlus "mo:class-plus/ClassPlus";
+//import TimerTool "mo:timer-tool/TimerTool";
 
 // EVM encoding
-import ABI "mo:encoding.mo/abi";
-import EVM "mo:encoding.mo/EVM";
-import Hex "mo:encoding.mo/hex";
-import Buffer "mo:buffer/Buffer";
+
+//import EVM "mo:evm-txs/Transaction";
+//import ABI "./ABI";
+//import Hex "mo:encoding/Hex";
+//import Binary "mo:encoding/Binary";
+import Types "./Types";
 
 ////////////////////////////////////////////////////
-// EVM RPC Module
+// Actor Definition
 ////////////////////////////////////////////////////
-module EVMRPC {
-  public type RpcServices = {};
-
-  public type EthSendRawTransactionResult = variant {
-    Ok : opt text;
-    NonceTooLow;
-    NonceTooHigh;
-    InsufficientFunds;
-    Other : text;
-  };
-
-  public type Service = actor {
-    eth_sendRawTransaction : (
-      RpcServices,
-      ?{
-        responseSizeEstimate : ?nat64;
-        responseConsensus : ?variant { Equality; SuperMajority; Absolute };
-      },
-      text
-    ) -> async variant {
-      Consistent : variant {
-        Ok : EthSendRawTransactionResult;
-        Err : text;
-      };
-      Inconsistent : text;
-    };
-}
-
-////////////////////////////////////////////////////
-// Errors / Results
-////////////////////////////////////////////////////
-public type TxError = variant {
-  NotOwner;
-  InvalidSignature;
-  NonceTooLow;
-  NonceTooHigh;
-  InsufficientFunds;
-  RpcError : text;
-  GenericError : text;
-};
-
-public module Result {
-  public type Result<OkType, ErrType> = variant {
-    ok : OkType;
-    err : ErrType;
-  };
-}
-
-////////////////////////////////////////////////////
-// Environment & Network
-////////////////////////////////////////////////////
-public type DeploymentEnv = {
-  #Mainnet;
-  #Testnet;
-};
-
-public type Network = variant {
-  Ethereum : opt Nat;
-  Base : opt Nat;
-};
-
-public type RemoteNFTPointer = {
-  tokenId : Nat;
-  contract : Text;
-  network : Network;
-};
-
-// Example bridging snippet
-module Hub {
-  public type BridgeArgs = record {
-    token : principal;
-    from_tx_id : opt text;
-    recipient : text;
-    target_chain_id : text;
-    from_address : opt text;
-    amount : nat;
-  };
-  public type BridgeResponse = record { history_id : nat64 };
-  public type HubError = variant { PermissionDenied; };
-  public type Result_1 = variant { Ok : BridgeResponse; Err : HubError };
-  public type HubService = actor {
-    bridge : (BridgeArgs) -> (Result_1);
-  };
-}
+actor {
 
 ////////////////////////////////////////////////////
 // Stable Vars
@@ -120,13 +51,20 @@ module Hub {
 // Owner principal
 stable var owner : Principal = Principal.fromText("aaaaa-aa");
 // BTreeMap for (derivationPath -> nextNonce)
-stable let nonceMap = StableBTreemap.init<Blob, Nat>(1, Blob.compare);
+//stable let nonceMap = StableBTreeMap.init<Blob, Nat>(?1, Blob.compare);
+/*stable*/ var nonceMap = StableTrieMap.Map({
+    pointer_size = 2;
+    aridity = 2;
+    root_aridity = null;
+    key_size = 2;
+    value_size = 1;
+}); //StableTrieMap.init<Blob, Nat>();
 // ECDSA key name
 stable var ecdsaKeyName : Text = "Key_1";
 // EVM RPC canister ID
-stable var evmRpcCanisterId : Principal = principal "7hfb6-caaaa-aaaar-qadga-cai";
+stable var evmRpcCanisterId : Principal = Principal.fromText("7hfb6-caaaa-aaaar-qadga-cai");
 // Env setting
-stable var env : DeploymentEnv = #Testnet;
+stable var env : EVMRPC.DeploymentEnv = #Testnet;
 
 ////////////////////////////////////////////////////
 // Management canister for ECDSA
@@ -145,81 +83,32 @@ type ICManagement = actor {
   }) -> async ({ signature : Blob });
 };
 
-////////////////////////////////////////////////////
-// Private Helpers
-////////////////////////////////////////////////////
-private func is_owner(p : Principal) : Bool {
-  // If you do NOT want the controller to have ownership rights, remove this line:
-  if (Principal.isController(p)) { 
-    return true; 
-  };
-  p == owner
-};
-
-/// getNextNonce : reads/increments stable BTreeMap for concurrency safety
-private func getNextNonce(path : Blob) : Nat {
-  let existing = nonceMap.get(path);
-  switch (existing) {
-    case null {
-      nonceMap.put(path, 1);
-      0
-    };
-    case (?current) {
-      let next = current + 1;
-      nonceMap.put(path, next);
-      current
-    };
-  }
-};
-
-/// sendToEvmRpc : sends a raw hex transaction to EVM RPC
-private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, TxError> {
-  let evmActor = actor(evmRpcCanisterId) : EVMRPC.Service;
-  let result = await evmActor.eth_sendRawTransaction({}, null, "0x" # rawTx);
-
-  switch (result) {
-    case (#Consistent(#Ok(#Ok(?txHash)))) { #ok(txHash) };
-    case (#Consistent(#Ok(#Ok(null))))     { #ok("0x") };
-    case (#Consistent(#Ok(#NonceTooLow)))  { #err(#NonceTooLow) };
-    case (#Consistent(#Ok(#NonceTooHigh))) { #err(#NonceTooHigh) };
-    case (#Consistent(#Ok(#InsufficientFunds))) { #err(#InsufficientFunds) };
-    case (#Consistent(#Ok(#Other(err))))   { #err(#RpcError(err)) };
-    case (#Consistent(#Err(err)))          { #err(#RpcError(err)) };
-    case (#Inconsistent(err))              { #err(#RpcError(err)) };
-  }
-};
-
-////////////////////////////////////////////////////
-// Actor Definition
-////////////////////////////////////////////////////
-actor {
-
   //---------------------------------------------
   // Admin & Env Functions
   //---------------------------------------------
   public shared({caller}) func setOwner(newOwner : Principal) : async () {
-    if (!is_owner(caller)) {
+    if (not is_owner(caller)) {
       Debug.print("Unauthorized attempt to set owner.");
       return;
     };
     owner := newOwner;
   };
 
-  public shared({caller}) func setEnv(newEnv : DeploymentEnv) : async () {
-    if (!is_owner(caller)) {
+  public shared({caller}) func setEnv(newEnv : EVMRPC.DeploymentEnv) : async () {
+    if (not is_owner(caller)) {
       Debug.print("Unauthorized attempt to set environment.");
       return;
     };
     env := newEnv;
   };
 
-  public shared(query) func getEnv() : async DeploymentEnv {
+  public query func getEnv() : async EVMRPC.DeploymentEnv {
     env
-  }
+  };
 
-  public shared(query) func getOwner() : async Principal {
+  public query func getOwner() : async Principal {
     owner
-  }
+  };
 
   //---------------------------------------------
   // ECDSA PubKey & Signing
@@ -227,7 +116,7 @@ actor {
   private func signWithEcdsa(
     msgHash : Blob,
     derivationPath : [Blob]
-  ) : async Result.Result<Blob, TxError> {
+  ) : async Result.Result<Blob, EVMRPC.TxError> {
     try {
       let mgmt : ICManagement = actor("aaaaa-aa");
       // If needed, add cycles: Cycles.add(25_000_000_000);
@@ -242,11 +131,11 @@ actor {
       Debug.print("signWithEcdsa error: " # Error.message(err));
       #err(#GenericError(Error.message(err)));
     }
-  }
+  };
 
   private func getEcdsaPublicKey(
     derivationPath : [Blob]
-  ) : async Result.Result<Blob, TxError> {
+  ) : async Result.Result<Blob, EVMRPC.TxError> {
     try {
       let mgmt : ICManagement = actor("aaaaa-aa");
       let { public_key } = await mgmt.ecdsa_public_key({
@@ -259,27 +148,40 @@ actor {
       Debug.print("getEcdsaPublicKey error: " # Error.message(err));
       #err(#GenericError(Error.message(err)));
     }
-  }
+  };
 
   /// getEvmAddress : Derive EVM address from secp256k1 pubkey
-  public shared(query) func getEvmAddress() : async Text {
+  public shared func getEvmAddress() : async Text {
     let pkResult = await getEcdsaPublicKey([]);
     switch (pkResult) {
       case (#err(e)) {
-        "ERROR_ECDSA_PUBKEY: " # Error.message(e)
+        let msg = switch(e) {
+          case (#GenericError(text)) { text };
+          case (#InsufficientFunds) { "Insufficient funds" };
+          case (#InvalidSignature) { "Invalid signature" };
+          case (#NonceTooHigh) { "Nonce too high" };
+          case (#NonceTooLow) { "Nonce too low" };
+          case (#NotOwner) { "Not owner" };
+          case (#RpcError(text)) { text };
+        };
+        "ERROR_ECDSA_PUBKEY: " # msg
       };
       case (#ok(pubKey)) {
         if (pubKey.size() < 65) {
           "ERROR: unexpected pubKey size"
         } else {
-          let raw = pubKey[1:65];  // skip 0x04
-          let hash = Hash.keccak256(raw);
-          let addrBytes = hash[(hash.size() - 20) : hash.size()];
+          let raw = Array.tabulate<Nat8>(64, func(i) { 
+            Blob.toArray(pubKey)[i + 1]  // skip 0x04
+          });
+          let sha3 = SHA3.Keccak(256);
+          sha3.update(raw);
+          let hash = sha3.finalize();
+          let addrBytes = Array.subArray(hash, hash.size() - 20, 20);
           "0x" # Hex.encode(addrBytes)
-        }
-      }
-    }
-  }
+        };
+      };
+    };
+  };
 
   //---------------------------------------------
   // EIP-1559 Generic Calls
@@ -298,8 +200,8 @@ actor {
   /// eip1559Call : generic EIP-1559 sign & send
   public shared({caller}) func eip1559Call(
     p : Eip1559Params
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let nonce = getNextNonce(p.derivationPath);
     let prepRes = EVM.Transaction1559.getMessageToSign({
@@ -351,20 +253,85 @@ actor {
                 case (#ok(finalTx)) {
                   let rawTx = Hex.encode(finalTx.1);
                   await sendToEvmRpc(rawTx);
-                }
-              }
-            }
-          }
-        }
-      }
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+
+
+  ////////////////////////////////////////////////////
+  // Private Helpers
+  ////////////////////////////////////////////////////
+  private func is_owner(p : Principal) : Bool {
+    // If you do NOT want the controller to have ownership rights, remove this line:
+    if (Principal.isController(p)) { 
+      return true; 
+    };
+    p == owner
+  };
+
+  private func natToBlob(n : Nat) : Blob {
+    let bytes = Buffer.Buffer<Nat8>(8);
+    var num = n;
+    while (num > 0) {
+      bytes.add(Nat8.fromNat(num % 256));
+      num /= 256;
+    };
+    Blob.fromArray(Buffer.toArray(bytes))
+  };
+
+  private func blobToNat(b : Blob) : Nat {
+    var num = 0;
+    let bytes = Blob.toArray(b);
+    for (i in Iter.range(0, bytes.size() - 1)) {
+      num := num * 256 + Nat8.toNat(bytes[i]);
+    };
+    num
+  };
+
+  /// getNextNonce : reads/increments stable BTreeMap for concurrency safety
+  private func getNextNonce(path : Blob) : Nat {
+    let existing = nonceMap.get(path);
+    switch (existing) {
+        case null {
+            nonceMap.put(path, natToBlob(1));
+            0
+        };
+        case (?current) {
+            let currentNat = blobToNat(current);
+            let next = currentNat + 1;
+            nonceMap.put(path, natToBlob(next));
+            currentNat
+        };
+    };
+  };
+
+  /// sendToEvmRpc : sends a raw hex transaction to EVM RPC
+  private func sendToEvmRpc(rawTx : Text) : async Result.Result<Text, EVMRPC.TxError> {
+    let evmActor = actor(Principal.toText(evmRpcCanisterId)) : EVMRPC.Service;
+    let result = await evmActor.eth_sendRawTransaction({}, null, "0x" # rawTx);
+
+    switch (result) {
+      case (#Consistent(#Ok(#Ok(?txHash)))) { #ok(txHash) };
+      case (#Consistent(#Ok(#Ok(null))))     { #ok("0x") };
+      case (#Consistent(#Ok(#NonceTooLow)))  { #err(#NonceTooLow) };
+      case (#Consistent(#Ok(#NonceTooHigh))) { #err(#NonceTooHigh) };
+      case (#Consistent(#Ok(#InsufficientFunds))) { #err(#InsufficientFunds) };
+      case (#Consistent(#Ok(#Other(err))))   { #err(#RpcError(err)) };
+      case (#Consistent(#Err(err)))          { #err(#RpcError(err)) };
+      case (#Inconsistent(err))              { #err(#RpcError(err)) };
     }
-  }
+  };
 
   //---------------------------------------------
   // Mint NFT (Example)
   //---------------------------------------------
   public type MintParams = {
-    pointer : RemoteNFTPointer;
+    pointer : EVMRPC.RemoteNFTPointer;
     to : Text;
     uri : Text;
     gasLimit : Nat;
@@ -375,8 +342,8 @@ actor {
 
   public shared({caller}) func mintNft(
     p : MintParams
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let chainId = switch (p.pointer.network) {
       case (#Ethereum(null)) { 1 };
@@ -388,7 +355,7 @@ actor {
     let methodSig = "mint_icrc99(uint256,address,string)";
     let callData = ABI.encodeFunctionCall(methodSig, [
       ABI.Value.uint256(p.pointer.tokenId),
-      ABI.Value.address(ABI.Address.fromText(p.to)),
+      ABI.Value.address(p.to),
       ABI.Value.string(p.uri)
     ]);
 
@@ -403,8 +370,8 @@ actor {
       derivationPath = p.derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // BaseSwap Contract Interactions
@@ -417,13 +384,13 @@ actor {
     maxPriorityFeePerGas : Nat;
     derivationPath : Blob;
     methodSig : Text;
-    args : [ABI.Value];
+    args : [[Nat8]];
   };
 
   public shared({caller}) func callBaseProxyContract(
     p : BaseCallParams
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let contractAddr = "0xde151d5c92bfaa288db4b67c21cd55d5826bcc93";
     let callData = ABI.encodeFunctionCall(p.methodSig, p.args);
@@ -439,8 +406,8 @@ actor {
       derivationPath = p.derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // Approve ERC20 for BaseSwap
@@ -455,12 +422,12 @@ actor {
     maxFeePerGas : Nat,
     maxPriorityFeePerGas : Nat,
     gasLimit : Nat
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let methodSig = "approve(address,uint256)";
     let callData = ABI.encodeFunctionCall(methodSig, [
-      ABI.Value.address(ABI.Address.fromText(spender)),
+      ABI.Value.address(spender),
       ABI.Value.uint256(amount)
     ]);
 
@@ -475,8 +442,8 @@ actor {
       derivationPath = derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // Increase Liquidity for BaseSwap
@@ -500,8 +467,8 @@ actor {
   /// A sample specialized function to call `increaseLiquidity(...)` on BaseSwap
   public shared({caller}) func increaseLiquidityBaseSwap(
     p : IncreaseLiquidityParams
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     // Typically: increaseLiquidity(uint256 tokenId, uint256 amount0Desired, 
     // uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, 
@@ -515,7 +482,7 @@ actor {
       ABI.Value.uint256(p.amount1Desired),
       ABI.Value.uint256(p.amount0Min),
       ABI.Value.uint256(p.amount1Min),
-      ABI.Value.address(ABI.Address.fromText(p.recipient)),
+      ABI.Value.address(p.recipient),
       ABI.Value.uint256(p.deadline)
     ]);
 
@@ -530,8 +497,8 @@ actor {
       derivationPath = p.derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // SEND ERC20
@@ -549,12 +516,12 @@ actor {
 
   public shared({caller}) func sendErc20(
     p : Erc20Params
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let methodSig = "transfer(address,uint256)";
     let callData = ABI.encodeFunctionCall(methodSig, [
-      ABI.Value.address(ABI.Address.fromText(p.to)),
+      ABI.Value.address(p.to),
       ABI.Value.uint256(p.amount)
     ]);
 
@@ -569,8 +536,8 @@ actor {
       derivationPath = p.derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // MAKE ETH VALUE TRANSACTION (EIP-1559)
@@ -583,11 +550,11 @@ actor {
     gasPrice : Nat;
     gasLimit : Nat;
     maxPriorityFeePerGas : Nat;
-    network : Network;
+    network : EVMRPC.Network;
     tecdsaSha : Blob;
     publicKey : [Nat8];
-  }) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  }) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let chainId = switch (request.network) {
       case (#Ethereum(val)) {
@@ -608,7 +575,7 @@ actor {
     let txParams : Eip1559Params = {
       to = request.to;
       value = request.value;
-      data = "0x";
+      data = [];  // Empty byte array instead of "0x"
       gasLimit = request.gasLimit;
       maxFeePerGas = request.gasPrice;
       maxPriorityFeePerGas = request.maxPriorityFeePerGas;
@@ -616,8 +583,8 @@ actor {
       derivationPath = request.tecdsaSha;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams)
+  };
 
   //---------------------------------------------
   // MAKE GENERAL ETH TRANSACTION (EIP-1559)
@@ -631,11 +598,11 @@ actor {
     gasLimit : Nat;
     maxPriorityFeePerGas : Nat;
     contract : Text;     
-    network : Network;
+    network : EVMRPC.Network;
     tecdsaSha : Blob;    
     publicKey : [Nat8];
-  }) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) { return #err(#NotOwner); };
+  }) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) { return #err(#NotOwner); };
 
     let chainId = switch (request.network) {
       case (#Ethereum(val)) {
@@ -666,7 +633,7 @@ actor {
       let txParams : Eip1559Params = {
         to = request.contract;
         value = 0;
-        data = "0x" # Hex.encode(finalData);
+        data = finalData;
         gasLimit = request.gasLimit;
         maxFeePerGas = request.gasPrice;
         maxPriorityFeePerGas = request.maxPriorityFeePerGas;
@@ -678,7 +645,7 @@ actor {
     } else {
       return #err(#GenericError("No method provided"));
     }
-  }
+  };
 
   //---------------------------------------------
   // BURN BASE TOKEN (Example bridging method)
@@ -693,8 +660,8 @@ actor {
     tokenAddress : Text,
     withdrawAmount : Nat,
     icpAddress : Text
-  ) : async Result.Result<Text, TxError> {
-    if (!is_owner(caller)) {
+  ) : async Result.Result<Text, EVMRPC.TxError> {
+    if (not is_owner(caller)) {
       return #err(#NotOwner);
     };
 
@@ -704,7 +671,7 @@ actor {
 
     let callData = ABI.encodeFunctionCall(methodSig, [
       ABI.Value.bytes(toChainBytes),
-      ABI.Value.address(ABI.Address.fromText(tokenAddress)),
+      ABI.Value.address(tokenAddress),
       ABI.Value.uint256(withdrawAmount),
       ABI.Value.bytes(chainAddress)
     ]);
@@ -720,19 +687,23 @@ actor {
       derivationPath = derivationPath;
     };
 
-    eip1559Call(txParams)
-  }
+    await eip1559Call(txParams);
+  };
 
   // Utility for formatting an ICP principal as [len, principalBytes...]
   private func formatICPAddressFuc(address : Text) : [Nat8] {
     let p = Principal.fromText(address);
     let arr = Principal.toBlob(p);
-    let length = Blob.size(arr);
+    let length = Blob.toArray(arr).size();
 
     var newArr = Array.init<Nat8>(length + 1, 0);
     newArr[0] := Nat8.fromNat(length);
-    Array.copy<Nat8>(newArr, 1, arr, 0, length);
+    
+    let blobArr = Blob.toArray(arr);
+    for (i in Iter.range(0, length - 1)) {
+        newArr[i + 1] := blobArr[i];
+    };
 
-    newArr
-  }
-}
+    Array.freeze(newArr)
+  };
+};

@@ -1,53 +1,30 @@
-import Hub "hub_client_canister/hub.did"; 
+import Hub "./hub";
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import Text "mo:base/Text";
+import Nat "mo:base/Nat";
+import Array "mo:base/Array";
+import ICRC1 "ICRC1";
 
 //ICRC-1 calls
-module ICRC1 {
-  public type BalanceOfArgs = { owner : blob; subaccount : ?blob };
-  public type TransferArgs = {
-    from_subaccount : ?blob;
-    to : blob;
-    fee : ?nat;
-    created_at_time : ?nat64;
-    memo : ?blob;
-    amount : nat;
-  };
-  public type TransferError = variant {
-    BadFee : record { expected_fee : nat };
-    BadBurn : record { min_burn_amount : nat };
-    InsufficientFunds : record { balance : nat };
-    TooOld;
-    CreatedInFuture : record { ledger_time : nat64 };
-    Duplicate : record { duplicate_of : nat64 };
-    TemporarilyUnavailable;
-    GenericError : record { message : text; error_code : nat };
-  };
-  public type TransferResult = variant { Ok : nat; Err : TransferError };
-  public type ICRC1Service = actor {
-    icrc1_balance_of : (BalanceOfArgs) -> (nat) query;
-    icrc1_transfer : (TransferArgs) -> (TransferResult);
-  };
-}
-
 actor {
 
-public type DeploymentEnv = { #Mainnet; #Testnet };
+  public type DeploymentEnv = { #Mainnet; #Testnet };
 
-func getHubCanisterId(env : DeploymentEnv) : principal {
-  switch (env) {
-    case (#Mainnet) { principal "n6ii2-2yaaa-aaaaj-azvia-cai" };   // mainnet
-    case (#Testnet) { principal "l5h5f-miaaa-aaaal-qjioq-cai" };   // testnet
-  }
-};
+  func getHubCanisterId(env : DeploymentEnv) : Principal {
+    switch (env) {
+      case (#Mainnet) { Principal.fromText("n6ii2-2yaaa-aaaaj-azvia-cai")};   // mainnet
+      case (#Testnet) { Principal.fromText("l5h5f-miaaa-aaaal-qjioq-cai")};   // testnet
+    }
+  };
 
-func getTargetChainId(env : DeploymentEnv) : Text {
-  switch (env) {
-    case (#Mainnet) { "base" };
-    case (#Testnet) { "base_sepolia" };
-  }
-};
+  func getTargetChainId(env : DeploymentEnv) : Text {
+    switch (env) {
+      case (#Mainnet) { "base" };
+      case (#Testnet) { "base_sepolia" };
+    }
+  };
+
   // stable environment var (Mainnet|Testnet)
   stable var env : DeploymentEnv = #Testnet;
 
@@ -62,13 +39,13 @@ func getTargetChainId(env : DeploymentEnv) : Text {
 
   // Return an actor reference to the Hub canister
   private func hubActor() : Hub.service {
-    let pid = getHubCanisterId(env);
+    let pid = Principal.toText(getHubCanisterId(env));
     return actor(pid) : Hub.service;
   };
 
   // Bridge ICRC token to Base (mainnet or testnet)
   public shared(msg) func bridgeICRCToken(
-    tokenPid : principal,
+    tokenPid : Principal,
     fromTxId : ?Text,
     recipientEvmAddress : Text,
     fromAddress : ?Text,
@@ -91,51 +68,66 @@ func getTargetChainId(env : DeploymentEnv) : Text {
     return await hubActor().bridge(bridgeArgs);
   };
 
+  // Check if address is blacklisted
+  private func isBlacklisted(addr : Text) : Bool {
+    for (blacklisted in blacklistedAddresses.vals()) {
+      if (blacklisted == addr) return true;
+    };
+    false
+  };
+
   // ICRC-1 validation logic
-  public shared(query) func validate_send_icrc1_tokens(
-    tokenCanister : principal,
+  public query func validate_send_icrc1_tokens(
+    tokenCanister : Principal,
     from : Text,
     to : Text,
-    amount : Nat
+    amount : Nat,
+    fee : ?Nat
   ) : async Bool {
-    if (blacklistedAddresses.contains(to)) {
-      Debug.print("Address blacklisted => " # to);
-      return false;
+    let blacklisted = Array.find<Text>(blacklistedAddresses, func(x) { x == to });
+    switch (blacklisted) {
+      case (?_) {
+        Debug.print("Address blacklisted => " # to);
+        return false;
+      };
+      case null {};
     };
     if (from == to) {
       Debug.print("Cannot send to self => " # from);
       return false;
     };
     // check balances
-    let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
+    // No real need to check balances since the icrc1_transfer will just fail
+    // if no sufficient balance exists.
+    /*let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
     let fromBlob = textToBlob(from);
     let bal = await icrc1Actor.icrc1_balance_of({owner = fromBlob; subaccount = null});
     Debug.print("Balance of " # from # " => " # Nat.toText(bal));
     if (bal < amount) {
       Debug.print("Not enough balance => " # Nat.toText(bal) # " < " # Nat.toText(amount));
       return false;
-    };
+    };*/
     true;
   };
 
   // Send ICRC tokens
   public shared(msg) func send_icrc1_tokens(
-    tokenCanister : principal,
+    tokenCanister : Principal,
     from : Text,
     to : Text,
     amount : Nat,
     fee : ?Nat
   ) : async ICRC1.TransferResult {
     Debug.print("Attempting to send ICRC from=" # from # " to=" # to # " amt=" # Nat.toText(amount));
-    let canSend = await validate_send_icrc1_tokens(tokenCanister, from, to, amount);
-    if (!canSend) {
-      return #err(#GenericError({
-        message = "Validation failed, cannot send",
-        error_code = 200
+    let canSend = await validate_send_icrc1_tokens(tokenCanister, from, to, amount, fee);
+    if (not canSend) {
+      return #Err(#GenericError({
+        message = "Validation failed, cannot send";
+        error_code = 200;
       }));
     };
 
-    let icrc1Actor = actor(tokenCanister) : ICRC1.ICRC1Service;
+    let icrc1Actor = actor(Principal.toText(tokenCanister)) : ICRC1.ICRC1Service;
 
     let tArgs : ICRC1.TransferArgs = {
       from_subaccount = null;   // or some subaccount if needed
@@ -157,9 +149,9 @@ func getTargetChainId(env : DeploymentEnv) : Text {
   };
 
   // `debug_show`
-  private func debug_show<T>(x : T) : text {
-    return Debug.printable(x);
-  };
+  //private func debug_show<T>(x : T) : text {
+  //  return Debug.printable(x);
+  //};
 
   private func is_owner(principal : Principal) : Bool { 
   if (Principal.isController(principal)) { return true; };
