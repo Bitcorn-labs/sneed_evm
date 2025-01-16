@@ -44,7 +44,7 @@ actor {
   };
 
   // Bridge ICRC token to Base (mainnet or testnet)
-  public shared(msg) func bridgeICRCToken(
+  public shared(_msg) func bridgeICRCToken(
     tokenPid : Principal,
     fromTxId : ?Text,
     recipientEvmAddress : Text,
@@ -69,7 +69,7 @@ actor {
   };
 
   // Check if address is blacklisted
-  private func isBlacklisted(addr : Text) : Bool {
+  private func _isBlacklisted(addr : Text) : Bool {
     for (blacklisted in blacklistedAddresses.vals()) {
       if (blacklisted == addr) return true;
     };
@@ -78,11 +78,11 @@ actor {
 
   // ICRC-1 validation logic
   public query func validate_send_icrc1_tokens(
-    tokenCanister : Principal,
+    _tokenCanister : Principal,
     from : Text,
     to : Text,
-    amount : Nat,
-    fee : ?Nat
+    _amount : Nat,
+    _fee : ?Nat
   ) : async Bool {
     let blacklisted = Array.find<Text>(blacklistedAddresses, func(x) { x == to });
     switch (blacklisted) {
@@ -111,7 +111,7 @@ actor {
   };
 
   // Send ICRC tokens
-  public shared(msg) func send_icrc1_tokens(
+  public shared(_msg) func send_icrc1_tokens(
     tokenCanister : Principal,
     from : Text,
     to : Text,
@@ -153,7 +153,7 @@ actor {
   //  return Debug.printable(x);
   //};
 
-  private func is_owner(principal : Principal) : Bool { 
+  private func _is_owner(principal : Principal) : Bool { 
   if (Principal.isController(principal)) { return true; };
   if (Principal.fromText("sneed-gov-here") == principal) { return true; };
   return false;
